@@ -1,5 +1,6 @@
 use std::process::Command;
 use std::fs;
+use similar::{ChangeTag, TextDiff};
 
 #[test]
 fn test_dirscribe_output_matches_ground_truth() {
@@ -32,9 +33,25 @@ fn test_dirscribe_output_matches_ground_truth() {
     let ground_truth = fs::read_to_string("tests/data/ground-truth.txt")
         .expect("Failed to read ground truth file");
 
-    assert_eq!(
-        output_content.trim(),
-        ground_truth.trim(),
-        "Output does not match ground truth"
-    );
+    if output_content.trim() != ground_truth.trim() {
+        // Create a diff of the two strings
+        let diff = TextDiff::from_lines(
+            ground_truth.trim(),
+            output_content.trim()
+        );
+
+        // Build detailed error message
+        let mut error_msg = String::from("\nDifferences found between output and ground truth:\n");
+        
+        for change in diff.iter_all_changes() {
+            let sign = match change.tag() {
+                ChangeTag::Delete => "- ",
+                ChangeTag::Insert => "+ ",
+                ChangeTag::Equal => "  ",
+            };
+            error_msg.push_str(&format!("{}{}", sign, change));
+        }
+
+        panic!("{}", error_msg);
+    }
 }

@@ -1,5 +1,3 @@
-use assert_fs::prelude::*;
-use predicates::prelude::*;
 use std::process::Command;
 use std::fs;
 
@@ -21,6 +19,7 @@ fn test_dirscribe_output_matches_ground_truth() {
             ".",
             "rs,md",
             "--use-gitignore",
+            "--exclude-paths=tests",
             "--output-path=tests/output/dirscribe-output.txt"
         ])
         .output()

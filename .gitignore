@@ -3,3 +3,5 @@
 dirscribe.txt
 .aider*
 .env
+
+tests/output

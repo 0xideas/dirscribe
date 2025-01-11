@@ -1,9 +1,10 @@
 use clap::Parser;
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use git2::{Repository, DiffFormat, Tree, Diff};
+
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -13,6 +14,10 @@ struct Cli {
 
     /// Comma-separated list of file extensions to process (e.g., "txt,md,rs")
     suffixes: String,
+
+    /// Path to prompt template file
+    #[arg(long)]
+    prompt_template_path: Option<String>,
 
     /// Ignore files based on .gitignore rules
     #[arg(long, default_value_t = false)]
@@ -77,9 +82,6 @@ fn main() -> io::Result<()> {
         }
         None => Vec::new()
     };
-    
-
-// comment kjdalkdlaslkjnalsknd kjlkl kl
 
     let or_keywords: Vec<String> = cli.or_keywords
         .map(|s| if s.contains(',') {
@@ -105,7 +107,8 @@ fn main() -> io::Result<()> {
         })
         .unwrap_or_default();
 
-    match process_directory(
+    // Process directory and get the content string
+    let content = process_directory(
         &cli.directory_path,
         &suffixes,
         cli.use_gitignore,
@@ -117,10 +120,45 @@ fn main() -> io::Result<()> {
         &exclude_keywords,
         cli.start_commit_id.as_deref(),
         cli.end_commit_id.as_deref()
-    ) {
-        Ok(_) => println!("Successfully processed directory and created dirscribe.txt"),
-        Err(e) => eprintln!("Error processing directory: {}", e),
+    )?;
+
+    // Handle the final output based on whether we have a template
+    if let Some(template_path) = cli.prompt_template_path {
+        write_output_with_template(&content, &template_path)?;
+    } else {
+        // Write directly to dirscribe.txt if no template
+        let mut output_file = File::create("dirscribe.txt")?;
+        output_file.write_all(content.as_bytes())?;
     }
+
+    println!("Successfully processed directory and created output file");
+    Ok(())
+}
+
+
+fn write_output_with_template(content: &str, template_path: &str) -> io::Result<()> {
+    // Read the template file
+    let template = fs::read_to_string(template_path).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to read template file: {}", e)
+        )
+    })?;
+
+    // Check for the required placeholder
+    if !template.contains("${${CONTENT}$}$") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Template file must contain the placeholder '${${CONTENT}$}$'"
+        ));
+    }
+
+    // Replace the placeholder with the content
+    let final_output = template.replace("${${CONTENT}$}$", content);
+
+    // Write to output file
+    let mut output_file = File::create("dirscribe.txt")?;
+    output_file.write_all(final_output.as_bytes())?;
 
     Ok(())
 }
@@ -218,8 +256,8 @@ fn process_directory(
     exclude_keywords: &[String],
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
-) -> io::Result<()> {
-    let mut output_file = File::create("dirscribe.txt")?;
+) -> io::Result<String> {
+    let mut output = Cursor::new(Vec::new());
     let dir_path = Path::new(dir_path);
     
     let repo = if diff_only {
@@ -307,19 +345,19 @@ fn process_directory(
     }
 
     // Write all file paths at the top
-    writeln!(output_file, "File Paths:")?;
+    writeln!(output, "File Paths:")?;
     for file_path in &valid_files {
-        writeln!(output_file, "{}", file_path.display())?;
+        writeln!(output, "{}", file_path.display())?;
     }
-    writeln!(output_file)?;
-    writeln!(output_file, "File Contents:")?;
-    writeln!(output_file)?;
+    writeln!(output)?;
+    writeln!(output, "File Contents:")?;
+    writeln!(output)?;
 
     // Process each file
     for file_path in valid_files {
         process_file(
             &file_path,
-            &mut output_file,
+            &mut output,
             diff_only,
             repo.as_ref(),
             start_commit_id,
@@ -327,7 +365,9 @@ fn process_directory(
         )?;
     }
 
-    Ok(())
+    // Convert the output buffer to a string
+    String::from_utf8(output.into_inner())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 
@@ -406,10 +446,10 @@ fn filter_diff_for_file(diff_str: &str, file_path: &Path) -> String {
 }
 
 
-
+// First, let's modify the process_file function signature to accept Write instead of File
 fn process_file(
     file_path: &PathBuf,
-    output_file: &mut File,
+    output_file: &mut impl Write,  // Changed from &mut File to &mut impl Write
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
@@ -421,7 +461,6 @@ fn process_file(
     // Write file path and contents
     writeln!(output_file, "File: {}", file_path.display())?;
     writeln!(output_file, "{}", contents)?;
-
 
     if diff_only {
         if let Some(repo) = repo {

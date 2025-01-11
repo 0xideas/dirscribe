@@ -1,16 +1,14 @@
-use std::fs::{self, File};
+use std::fs::File;
 mod cli;
 mod git;
 mod file_processing;
 mod output;
 use cli::Cli;
-use file_processing::{process_directory, process_file, should_include_file};
+use file_processing::process_directory;
 use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
-use std::io::{self, Write, Cursor};
-use std::path::{Path, PathBuf};
-use ignore::WalkBuilder;
-use git2::{Repository, DiffFormat, Tree, Diff};
+use std::io::{self, Write};
+use std::path::PathBuf;
 
 
 

@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+use std::fs;
 use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;

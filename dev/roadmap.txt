@@ -1,0 +1,4 @@
+filter out .gitignore
+optional argument for excluded paths
+optional argument for included paths
+optional keyword filtering for files

@@ -1,0 +1,25 @@
+[package]
+name = "dirscribe"
+version = "0.4.0-alpha.1"
+edition = "2021"
+authors = ["Leon Luithlen"]
+description = "A CLI tool that combines contents of files with specific extensions from a directory"
+readme = "README.md"
+homepage = "https://github.com/0xideas/dirscribe"
+repository = "https://github.com/0xideas/dirscribe"
+license = "MIT"
+keywords = ["cli", "files", "directory", "concatenate", "utility"]
+categories = ["command-line-utilities", "filesystem"]
+
+
+
+
+[dependencies]
+walkdir = "2.3"
+ignore = "0.4"
+clap = { version = "4.4", features = ["derive"] }
+git2 = "^0.19.0"
+
+[[bin]]
+name = "dirscribe"
+path = "src/main.rs"

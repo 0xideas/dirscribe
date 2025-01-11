@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 mod cli;
 use cli::Cli;
+use clap::Parser;
 use std::io::{self, Write, Cursor};
 use std::path::Path;
 use ignore::WalkBuilder;

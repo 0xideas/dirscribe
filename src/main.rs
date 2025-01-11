@@ -244,9 +244,12 @@ fn process_directory(
         }
     }
 
+    // First, collect all valid file paths
+    let mut valid_files = Vec::new();
+    
     let walker = WalkBuilder::new(dir_path)
-        .hidden(false)  // Show hidden files
-        .git_ignore(use_gitignore)  // Use .gitignore based on CLI argument
+        .hidden(false)
+        .git_ignore(use_gitignore)
         .build();
 
     for result in walker {
@@ -285,19 +288,17 @@ fn process_directory(
                                     continue;
                                 }
                             }
+
+                            // Check keyword filters before adding to valid files
+                            if should_include_file(
+                                &path.to_path_buf(),
+                                or_keywords,
+                                and_keywords,
+                                exclude_keywords,
+                            )? {
+                                valid_files.push(path.to_path_buf());
+                            }
                         }
-                        
-                        process_file(
-                            &path.to_path_buf(),
-                            &mut output_file,
-                            or_keywords,
-                            and_keywords,
-                            exclude_keywords,
-                            diff_only,
-                            repo.as_ref(),
-                            start_commit_id,
-                            end_commit_id
-                        )?;
                     }
                 }
             }
@@ -305,8 +306,64 @@ fn process_directory(
         }
     }
 
+    // Write all file paths at the top
+    writeln!(output_file, "File Paths:")?;
+    for file_path in &valid_files {
+        writeln!(output_file, "{}", file_path.display())?;
+    }
+    writeln!(output_file)?;
+    writeln!(output_file, "File Contents:")?;
+    writeln!(output_file)?;
+
+    // Process each file
+    for file_path in valid_files {
+        process_file(
+            &file_path,
+            &mut output_file,
+            diff_only,
+            repo.as_ref(),
+            start_commit_id,
+            end_commit_id
+        )?;
+    }
+
     Ok(())
 }
+
+
+fn should_include_file(
+    file_path: &PathBuf,
+    or_keywords: &[String],
+    and_keywords: &[String],
+    exclude_keywords: &[String],
+) -> io::Result<bool> {
+    let contents = fs::read_to_string(file_path)?;
+
+    // Check exclude keywords - skip if any are present
+    if exclude_keywords.iter().any(|keyword| contents.contains(keyword)) {
+        return Ok(false);
+    }
+    
+    // Check OR keywords - at least one must be present
+    if !or_keywords.is_empty() {
+        let contains_or_keyword = or_keywords.iter().any(|keyword| contents.contains(keyword));
+        if !contains_or_keyword {
+            return Ok(false);
+        }
+    }
+
+    // Check AND keywords - all must be present
+    if !and_keywords.is_empty() {
+        let contains_all_keywords = and_keywords.iter().all(|keyword| contents.contains(keyword));
+        if !contains_all_keywords {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+
 
 fn get_diff_str(diff: &Diff) -> io::Result<String> {
     let mut diff_output = Vec::new();
@@ -349,12 +406,10 @@ fn filter_diff_for_file(diff_str: &str, file_path: &Path) -> String {
 }
 
 
+
 fn process_file(
     file_path: &PathBuf,
     output_file: &mut File,
-    or_keywords: &[String],
-    and_keywords: &[String],
-    exclude_keywords: &[String],
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
@@ -362,33 +417,10 @@ fn process_file(
 ) -> io::Result<()> {
     // Read file contents
     let contents = fs::read_to_string(file_path)?;
-
-    // Check exclude keywords - skip if any are present
-    if exclude_keywords.iter().any(|keyword| contents.contains(keyword)) {
-        return Ok(());
-    }
-    
-    // Check OR keywords - at least one must be present
-    if !or_keywords.is_empty() {
-        let contains_or_keyword = or_keywords.iter().any(|keyword| contents.contains(keyword));
-        if !contains_or_keyword {
-            return Ok(());
-        }
-    }
-
-    // Check AND keywords - all must be present
-    if !and_keywords.is_empty() {
-        let contains_all_keywords = and_keywords.iter().all(|keyword| contents.contains(keyword));
-        if !contains_all_keywords {
-            return Ok(());
-        }
-    }
     
     // Write file path and contents
     writeln!(output_file, "File: {}", file_path.display())?;
     writeln!(output_file, "{}", contents)?;
-
-
 
 
     if diff_only {

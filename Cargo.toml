@@ -1,6 +1,6 @@
 [package]
 name = "dirscribe"
-version = "0.4.0-alpha.3"
+version = "0.4.0-alpha.5"
 edition = "2021"
 authors = ["Leon Luithlen"]
 description = "A CLI tool that combines contents of files with specific extensions from a directory"
@@ -12,13 +12,12 @@ keywords = ["cli", "files", "directory", "concatenate", "utility"]
 categories = ["command-line-utilities", "filesystem"]
 
 
-
-
 [dependencies]
 walkdir = "2.3"
 ignore = "0.4"
 clap = { version = "4.4", features = ["derive"] }
 git2 = "^0.19.0"
+clipboard = "0.5.0"
 
 [[bin]]
 name = "dirscribe"

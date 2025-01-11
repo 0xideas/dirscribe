@@ -4,6 +4,7 @@ use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use git2::{Repository, DiffFormat, Tree, Diff};
+use clipboard::{ClipboardContext, ClipboardProvider};
 
 
 #[derive(Parser)]
@@ -18,6 +19,10 @@ struct Cli {
     /// Path to prompt template file
     #[arg(long)]
     prompt_template_path: Option<String>,
+
+    /// Path to output path
+    #[arg(long)]
+    output_path: Option<String>,
 
     /// Ignore files based on .gitignore rules
     #[arg(long, default_value_t = false)]
@@ -122,21 +127,46 @@ fn main() -> io::Result<()> {
         cli.end_commit_id.as_deref()
     )?;
 
-    // Handle the final output based on whether we have a template
-    if let Some(template_path) = cli.prompt_template_path {
-        write_output_with_template(&content, &template_path)?;
+    let final_content = if let Some(template_path) = cli.prompt_template_path {
+        process_with_template(&content, &template_path)?
     } else {
-        // Write directly to dirscribe.txt if no template
-        let mut output_file = File::create("dirscribe.txt")?;
-        output_file.write_all(content.as_bytes())?;
-    }
+        content
+    };
 
-    println!("Successfully processed directory and created output file");
+
+    if let Some(output_path) = cli.output_path {
+        let mut output_file = File::create(&output_path)?;
+        output_file.write_all(final_content.as_bytes())?;
+        println!("Successfully processed directory and written output to {}", output_path);
+    } else {
+        write_to_clipboard(&final_content)?;
+        println!("Successfully processed directory and copied output to clipboard");
+    };
     Ok(())
 }
 
 
-fn write_output_with_template(content: &str, template_path: &str) -> io::Result<()> {
+
+fn write_to_clipboard(content: &str) -> io::Result<()> {
+    let mut ctx: ClipboardContext = ClipboardProvider::new().map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to create clipboard context: {}", e)
+        )
+    })?;
+    
+    ctx.set_contents(content.to_owned()).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to set clipboard contents: {}", e)
+        )
+    })?;
+    
+    Ok(())
+}
+
+
+fn process_with_template(content: &str, template_path: &str) -> io::Result<String> {
     // Read the template file
     let template = fs::read_to_string(template_path).map_err(|e| {
         io::Error::new(
@@ -154,13 +184,7 @@ fn write_output_with_template(content: &str, template_path: &str) -> io::Result<
     }
 
     // Replace the placeholder with the content
-    let final_output = template.replace("${${CONTENT}$}$", content);
-
-    // Write to output file
-    let mut output_file = File::create("dirscribe.txt")?;
-    output_file.write_all(final_output.as_bytes())?;
-
-    Ok(())
+    Ok(template.replace("${${CONTENT}$}$", content))
 }
 
 

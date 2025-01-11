@@ -2,14 +2,15 @@ use std::fs::{self, File};
 mod cli;
 mod git;
 mod file_processing;
+mod output;
 use cli::Cli;
 use file_processing::{process_directory, process_file, should_include_file};
+use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
 use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use git2::{Repository, DiffFormat, Tree, Diff};
-use clipboard::{ClipboardContext, ClipboardProvider};
 
 
 
@@ -99,45 +100,8 @@ fn main() -> io::Result<()> {
 
 
 
-fn write_to_clipboard(content: &str) -> io::Result<()> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new().map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to create clipboard context: {}", e)
-        )
-    })?;
-    
-    ctx.set_contents(content.to_owned()).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to set clipboard contents: {}", e)
-        )
-    })?;
-    
-    Ok(())
-}
 
 
-fn process_with_template(content: &str, template_path: &str) -> io::Result<String> {
-    // Read the template file
-    let template = fs::read_to_string(template_path).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to read template file: {}", e)
-        )
-    })?;
-
-    // Check for the required placeholder
-    if !template.contains("${${CONTENT}$}$") {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Template file must contain the placeholder '${${CONTENT}$}$'"
-        ));
-    }
-
-    // Replace the placeholder with the content
-    Ok(template.replace("${${CONTENT}$}$", content))
-}
 
 
 

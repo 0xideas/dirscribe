@@ -3,7 +3,7 @@ mod cli;
 use cli::Cli;
 use clap::Parser;
 use std::io::{self, Write, Cursor};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use git2::{Repository, DiffFormat, Tree, Diff};
 use clipboard::{ClipboardContext, ClipboardProvider};

@@ -1,5 +1,6 @@
-use clap::Parser;
 use std::fs::{self, File};
+mod cli;
+use cli::Cli;
 use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
@@ -7,59 +8,6 @@ use git2::{Repository, DiffFormat, Tree, Diff};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 
-#[derive(Parser)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    /// Directory to process
-    directory_path: String,
-
-    /// Comma-separated list of file extensions to process (e.g., "txt,md,rs")
-    suffixes: String,
-
-    /// Path to prompt template file
-    #[arg(long)]
-    prompt_template_path: Option<String>,
-
-    /// Path to output path
-    #[arg(long)]
-    output_path: Option<String>,
-
-    /// Ignore files based on .gitignore rules
-    #[arg(long, default_value_t = false)]
-    use_gitignore: bool,
-
-    /// Comma-separated list of paths to exclude
-    #[arg(long)]
-    exclude_paths: Option<String>,
-
-    /// Comma-separated list of paths to include
-    #[arg(long)]
-    include_paths: Option<String>,
-
-    /// Comma-separated list of keywords - only include files containing at least one keyword
-    #[arg(long)]
-    or_keywords: Option<String>,
-
-    /// Comma-separated list of keywords - only include files containing all keywords
-    #[arg(long)]
-    and_keywords: Option<String>,
-
-    /// Comma-separated list of keywords - exclude files containing any of these keywords
-    #[arg(long)]
-    exclude_keywords: Option<String>,
-
-    /// Only show files that have differences
-    #[arg(long, default_value_t = false)]
-    diff_only: bool,
-
-    /// Starting commit hash for diff comparison
-    #[arg(long)]
-    start_commit_id: Option<String>,
-
-    /// Ending commit hash for diff comparison
-    #[arg(long)]
-    end_commit_id: Option<String>,
-}
 
 fn main() -> io::Result<()> {
     let cli = Cli::parse();

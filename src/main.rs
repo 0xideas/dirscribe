@@ -2,7 +2,7 @@ use std::fs::{self, File};
 mod cli;
 use cli::Cli;
 use std::io::{self, Write, Cursor};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use ignore::WalkBuilder;
 use git2::{Repository, DiffFormat, Tree, Diff};
 use clipboard::{ClipboardContext, ClipboardProvider};

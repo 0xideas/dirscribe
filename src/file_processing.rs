@@ -65,38 +65,51 @@ pub fn process_directory(
                     }
                 }
 
-                if let Some(file_suffix) = path.extension() {
-                    if suffixes.iter().any(|s| s == file_suffix.to_str().unwrap_or("")) {
-                        // Get relative path from base directory
-                        if let Ok(relative_path) = path.strip_prefix(dir_path) {
-                            let relative_path_str = relative_path.to_string_lossy();
-                            
-                            // Skip if path matches any exclude pattern
-                            if exclude_paths.iter().any(|excluded| 
-                                relative_path_str.starts_with(&excluded.to_string_lossy().as_ref())
-                            ) {
+                // Split file matching into two cases:
+                // 1. Files with extensions matching suffixes
+                // 2. Exact filename matches (like "Dockerfile")
+                let should_include = if let Some(file_suffix) = path.extension() {
+                    // Case 1: Check if extension matches any suffix
+                    suffixes.iter().any(|s| s == file_suffix.to_str().unwrap_or(""))
+                } else {
+                    // Case 2: For files without extensions, check if the full filename matches any suffix
+                    if let Some(filename) = path.file_name() {
+                        suffixes.iter().any(|s| s == filename.to_str().unwrap_or(""))
+                    } else {
+                        false
+                    }
+                };
+
+                if should_include {
+                    // Get relative path from base directory
+                    if let Ok(relative_path) = path.strip_prefix(dir_path) {
+                        let relative_path_str = relative_path.to_string_lossy();
+                        
+                        // Skip if path matches any exclude pattern
+                        if exclude_paths.iter().any(|excluded| 
+                            relative_path_str.starts_with(&excluded.to_string_lossy().as_ref())
+                        ) {
+                            continue;
+                        }
+                        
+                        // Skip if include patterns exist and path doesn't match any
+                        if !include_paths.is_empty() {
+                            let is_included = include_paths.iter().any(|included|
+                                relative_path_str.starts_with(&included.to_string_lossy().as_ref())
+                            );
+                            if !is_included {
                                 continue;
                             }
-                            
-                            // Skip if include patterns exist and path doesn't match any
-                            if !include_paths.is_empty() {
-                                let is_included = include_paths.iter().any(|included|
-                                    relative_path_str.starts_with(&included.to_string_lossy().as_ref())
-                                );
-                                if !is_included {
-                                    continue;
-                                }
-                            }
+                        }
 
-                            // Check keyword filters before adding to valid files
-                            if should_include_file(
-                                &path.to_path_buf(),
-                                or_keywords,
-                                and_keywords,
-                                exclude_keywords,
-                            )? {
-                                valid_files.push(path.to_path_buf());
-                            }
+                        // Check keyword filters before adding to valid files
+                        if should_include_file(
+                            &path.to_path_buf(),
+                            or_keywords,
+                            and_keywords,
+                            exclude_keywords,
+                        )? {
+                            valid_files.push(path.to_path_buf());
                         }
                     }
                 }

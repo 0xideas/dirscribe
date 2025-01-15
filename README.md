@@ -22,12 +22,12 @@ cargo install dirscribe
 
 Basic syntax:
 ```bash
-dirscribe <comma_separated_suffixes> [options]
+dirscribe <comma_separated_suffixes_or_file_names> [options]
 ```
 
 Example:
 ```bash
-dirscribe . md,rs
+dirscribe md,py,Dockerfile
 ```
 
 ### Options
@@ -44,11 +44,11 @@ dirscribe . md,rs
 - `--output-path`: Path where the output file should be written. If not provided, output will be copied to clipboard
 - `--dont-use-gitignore`: include files covered by .gitignore
 
-### Advanced Example
+### Example with Diff Only
 
 ```bash
 # Example using Git commit range
-dirscribe . rs,md \
+dirscribe rs,md \
   --diff-only \
   --start-commit-id abc123 \
   --end-commit-id def456
@@ -56,10 +56,10 @@ dirscribe . rs,md \
 
 This will only process files that changed between commits abc123 and def456.
 
-### Advanced Example with All Options
+### Example with Prompt Template
 
 ```bash
-dirscribe . rs,md \
+dirscribe rs,md \
   --exclude-paths src/core,src/temp \
   --or-keywords "TODO,FIXME" \
   --prompt-template-path "summarize-issues-to-address-prompt.txt"

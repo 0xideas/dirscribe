@@ -8,7 +8,7 @@ use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
 pub fn process_directory(
     dir_path: &str,
     suffixes: &[String],
-    use_gitignore: bool,
+    dont_use_gitignore: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -48,7 +48,7 @@ pub fn process_directory(
     
     let walker = WalkBuilder::new(dir_path)
         .hidden(false)
-        .git_ignore(use_gitignore)
+        .git_ignore(!dont_use_gitignore)
         .build();
 
     for result in walker {

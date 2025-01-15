@@ -67,7 +67,7 @@ fn main() -> io::Result<()> {
     let content = process_directory(
         &cli.directory_path,
         &suffixes,
-        cli.use_gitignore,
+        cli.dont_use_gitignore,
         cli.diff_only,
         &exclude_paths,
         &include_paths,

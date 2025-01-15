@@ -17,9 +17,9 @@ pub struct Cli {
     #[arg(long)]
     pub output_path: Option<String>,
 
-    /// Ignore files based on .gitignore rules
+    /// Include files that are ignored by default based on .gitignore rules
     #[arg(long, default_value_t = false)]
-    pub use_gitignore: bool,
+    pub dont_use_gitignore: bool,
 
     /// Comma-separated list of paths to exclude
     #[arg(long)]

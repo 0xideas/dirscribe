@@ -3,9 +3,6 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Directory to process
-    pub directory_path: String,
-
     /// Comma-separated list of file extensions to process (e.g., "txt,md,rs")
     pub suffixes: String,
 
@@ -17,9 +14,9 @@ pub struct Cli {
     #[arg(long)]
     pub output_path: Option<String>,
 
-    /// Ignore files based on .gitignore rules
+    /// Include files that are ignored by default based on .gitignore rules
     #[arg(long, default_value_t = false)]
-    pub use_gitignore: bool,
+    pub dont_use_gitignore: bool,
 
     /// Comma-separated list of paths to exclude
     #[arg(long)]

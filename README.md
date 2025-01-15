@@ -22,7 +22,7 @@ cargo install dirscribe
 
 Basic syntax:
 ```bash
-dirscribe <directory_path> <comma_separated_suffixes> [options]
+dirscribe <comma_separated_suffixes> [options]
 ```
 
 Example:
@@ -32,7 +32,6 @@ dirscribe . md,rs
 
 ### Options
 
-- `--use-gitignore`: Respect .gitignore rules
 - `--exclude-paths`: Comma-separated paths to exclude
 - `--include-paths`: Comma-separated paths to include
 - `--or-keywords`: Only include files containing at least one of these keywords
@@ -43,6 +42,7 @@ dirscribe . md,rs
 - `--end-commit-id`: Ending commit ID for Git diff range (optional). Must be used with start-commit-id
 - `--prompt-template-path`: Path to a template file that will wrap the output. The template must contain the placeholder `${${CONTENT}$}$` where the collected content should be inserted
 - `--output-path`: Path where the output file should be written. If not provided, output will be copied to clipboard
+- `--dont-use-gitignore`: include files covered by .gitignore
 
 ### Advanced Example
 
@@ -60,7 +60,6 @@ This will only process files that changed between commits abc123 and def456.
 
 ```bash
 dirscribe . rs,md \
-  --use-gitignore \
   --exclude-paths src/core,src/temp \
   --or-keywords "TODO,FIXME" \
   --prompt-template-path "summarize-issues-to-address-prompt.txt"

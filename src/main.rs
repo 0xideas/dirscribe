@@ -65,7 +65,7 @@ fn main() -> io::Result<()> {
 
     // Process directory and get the content string
     let content = process_directory(
-        &cli.directory_path,
+        ".",
         &suffixes,
         cli.dont_use_gitignore,
         cli.diff_only,

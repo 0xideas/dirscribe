@@ -17,7 +17,6 @@ fn test_dirscribe_output_matches_ground_truth() {
     // Run dirscribe command
     let output = Command::new("dirscribe")
         .args([
-            ".",
             "rs,md",
             "--exclude-paths=tests",
             "--output-path=tests/output/dirscribe-output.txt"

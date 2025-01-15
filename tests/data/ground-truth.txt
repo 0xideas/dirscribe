@@ -33,7 +33,7 @@ cargo install dirscribe
 
 Basic syntax:
 ```bash
-dirscribe <directory_path> <comma_separated_suffixes> [options]
+dirscribe <comma_separated_suffixes> [options]
 ```
 
 Example:
@@ -343,7 +343,7 @@ fn main() -> io::Result<()> {
 
     // Process directory and get the content string
     let content = process_directory(
-        &cli.directory_path,
+        ".",
         &suffixes,
         cli.dont_use_gitignore,
         cli.diff_only,
@@ -623,9 +623,6 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Directory to process
-    pub directory_path: String,
-
     /// Comma-separated list of file extensions to process (e.g., "txt,md,rs")
     pub suffixes: String,
 

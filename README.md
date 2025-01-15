@@ -22,7 +22,7 @@ cargo install dirscribe
 
 Basic syntax:
 ```bash
-dirscribe <directory_path> <comma_separated_suffixes> [options]
+dirscribe <comma_separated_suffixes> [options]
 ```
 
 Example:

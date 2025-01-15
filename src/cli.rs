@@ -3,9 +3,6 @@ use clap::Parser;
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Cli {
-    /// Directory to process
-    pub directory_path: String,
-
     /// Comma-separated list of file extensions to process (e.g., "txt,md,rs")
     pub suffixes: String,
 

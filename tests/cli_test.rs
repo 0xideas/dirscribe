@@ -1,15 +1,24 @@
 use std::process::Command;
 use std::fs;
 use similar::{ChangeTag, TextDiff};
+use std::sync::Once;
+
+static INIT: Once = Once::new();
+
+fn setup() {
+    INIT.call_once(|| {
+        // Install dirscribe from the current directory
+        let output = Command::new("cargo")
+            .args(["install", "--path", "."])
+            .output()
+            .expect("Failed to install dirscribe");
+        assert!(output.status.success(), "Failed to install dirscribe");
+    });
+}
 
 #[test]
 fn test_dirscribe_output_matches_ground_truth() {
-    // Install dirscribe from the current directory
-    let output = Command::new("cargo")
-        .args(["install", "--path", "."])
-        .output()
-        .expect("Failed to install dirscribe");
-    assert!(output.status.success(), "Failed to install dirscribe");
+    setup();
 
     // Create temporary output directory if it doesn't exist
     fs::create_dir_all("tests/output").expect("Failed to create output directory");
@@ -57,12 +66,7 @@ fn test_dirscribe_output_matches_ground_truth() {
 
 #[test]
 fn test_dirscribe_diff_only_output_matches_ground_truth() {
-    // Install dirscribe from the current directory
-    let output = Command::new("cargo")
-        .args(["install", "--path", "."])
-        .output()
-        .expect("Failed to install dirscribe");
-    assert!(output.status.success(), "Failed to install dirscribe");
+    setup();
 
     // Create temporary output directory if it doesn't exist
     fs::create_dir_all("tests/output").expect("Failed to create output directory");

@@ -35,7 +35,8 @@ dirscribe "*"
 ```
 
 ### Demo
-[![Video showing how to use dirscribe](https://www.youtube.com/watch?v=rkXIZi1i3HI&t=7s/0.jpg)](https://www.youtube.com/watch?v=rkXIZi1i3HI&t=7s "How To Copy A Whole Codebase To ChatGPT!!!")
+<video src="https://www.youtube.com/watch?v=rkXIZi1i3HI&t=7s" width="500" />
+
 
 ### Options
 

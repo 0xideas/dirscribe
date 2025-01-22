@@ -106,13 +106,6 @@ fn validate_template_path(path: &str) -> Result<(), ValidationError> {
 fn validate_output_path(path: &str) -> Result<(), ValidationError> {
     let path = Path::new(path);
     
-    // Check if parent directory exists or can be created
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            return Err(format!("Output directory does not exist: {}", parent.display()).into());
-        }
-    }
-
     // Check if path points to a directory
     if path.is_dir() {
         return Err(format!("Output path is a directory: {}", path.display()).into());

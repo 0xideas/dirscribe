@@ -78,7 +78,7 @@ fn test_dirscribe_diff_only_output_matches_ground_truth() {
             "--exclude-paths=tests",
             "--output-path=tests/output/dirscribe-output.txt",
             "--diff-only",
-            "--start-commit-id=1420e8e8126bab612a55f45c40ece45fa338958",
+            "--start-commit-id=1420e8e8126bab612a55f45c40ece45fa3389581",
             "--end-commit-id=d7f174db9aa03359d33b7a8e1b18944b88b74f35"
 
         ])

@@ -5,7 +5,7 @@ use git2::{Repository, Tree, Diff, DiffFormat};
 pub fn get_diff_list(
     repo: &Repository,
     start_commit_id: Option<&str>,
-    end_commit_id_id: Option<&str>,
+    end_commit_id: Option<&str>,
 ) -> io::Result<Vec<PathBuf>> {
     let mut diff_list = Vec::new();
     
@@ -20,7 +20,7 @@ pub fn get_diff_list(
     };
 
     // Get the diff based on provided arguments
-    let diff = match (start_commit_id, end_commit_id_id) {
+    let diff = match (start_commit_id, end_commit_id) {
         // Both None: compare working directory with HEAD
         (None, None) => {
             let head_tree = repo.head()

@@ -152,8 +152,60 @@ pub fn process_file(
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
 ) -> io::Result<()> {
-    // Read file contents
-    let contents = fs::read_to_string(file_path)?;
+    // Get the repository root path and normalize the relative path
+    let relative_path = if let Some(repo) = repo {
+        let repo_workdir = repo.workdir().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Could not get repository working directory")
+        })?;
+        
+        let full_path = fs::canonicalize(file_path)?;
+        let relative_path = full_path.strip_prefix(fs::canonicalize(repo_workdir)?)
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "File not in repository"))?;
+            
+        relative_path.to_path_buf()
+    } else {
+        file_path.clone()
+    };
+
+    // Helper function to get blob content from a specific commit
+    let get_file_at_commit = |commit_id: &str| -> io::Result<String> {
+        let repo = repo.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Repository not available")
+        })?;
+        
+        let commit = repo.revparse_single(commit_id)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?
+            .peel_to_commit()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
+            
+        let tree = commit.tree()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
+            
+        // Convert the path to a string without leading ./ and replace Windows-style paths
+        let path_str = relative_path.to_string_lossy()
+            .replace('\\', "/");
+            
+        let entry = tree.get_path(Path::new(&path_str))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to get path '{}': {}", path_str, e.message())))?;
+            
+        let blob = entry.to_object(repo)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
+            
+        let blob = blob.as_blob()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Not a blob"))?;
+            
+        String::from_utf8(blob.content().to_vec())
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    };
+
+    // Read file contents based on provided commit IDs
+    let contents = if let Some(end_id) = end_commit_id {
+        // If end_commit_id is provided, read from that commit
+        get_file_at_commit(end_id)?
+    } else {
+        // Otherwise read from current state
+        fs::read_to_string(file_path)?
+    };
     
     // Write file path and contents
     writeln!(output_file, "File: {}", file_path.display())?;

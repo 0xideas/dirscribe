@@ -564,15 +564,16 @@ use std::path::PathBuf;
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
+    assert!(
+        cli.suffixes == "*" || !cli.suffixes.chars().any(|s| s == '*'),
+        "\"*\" can only be used alone, file extensions are specified without wildcard, like 'py,toml,js'"
+    );
+
     if let Err(e) = validate_cli_args(&cli) {
         eprintln!("Error: {}", e.message);
         std::process::exit(1);
     }
 
-    assert!(
-        cli.suffixes == "*" || !cli.suffixes.chars().any(|s| s == '*'),
-        "\"*\" can only be used alone, file extensions are specified without wildcard, like 'py,toml,js'"
-    );
     
     let suffixes: Vec<String> = cli.suffixes.split(',').map(String::from).collect();
     
@@ -1007,7 +1008,7 @@ fn is_likely_text_file(path: &Path) -> bool {
     // For files without extension or unknown extensions, try to read a small sample
     // and check if it contains only valid UTF-8 text
     if let Ok(file) = std::fs::File::open(path) {
-        use std::io::{Read, Seek, SeekFrom};
+        use std::io::Read;
         let mut buffer = [0u8; 1024];
         let mut handle = file;
         

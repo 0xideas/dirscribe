@@ -340,7 +340,7 @@ fn is_likely_text_file(path: &Path) -> bool {
     // For files without extension or unknown extensions, try to read a small sample
     // and check if it contains only valid UTF-8 text
     if let Ok(file) = std::fs::File::open(path) {
-        use std::io::{Read, Seek, SeekFrom};
+        use std::io::Read;
         let mut buffer = [0u8; 1024];
         let mut handle = file;
         

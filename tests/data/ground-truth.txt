@@ -268,12 +268,11 @@ pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
     }
 
     // Validate git-related arguments
-    if cli.diff_only {
-        validate_git_args(
-            &cli.start_commit_id,
-            &cli.end_commit_id,
-        )?;
-    }
+    validate_git_args(
+        cli.diff_only,
+        &cli.start_commit_id,
+        &cli.end_commit_id,
+    )?;
 
     // Validate keywords
     validate_keywords(&cli.or_keywords, "or_keywords")?;
@@ -353,9 +352,24 @@ fn validate_output_path(path: &str) -> Result<(), ValidationError> {
 }
 
 fn validate_git_args(
+    diff_only: bool,
     start_commit: &Option<String>,
     end_commit: &Option<String>,
 ) -> Result<(), ValidationError> {
+
+    if diff_only && start_commit.is_none() {
+        return Err("--start-commit-id must be provided when using --diff-only".into());
+    }
+    if start_commit.is_some() && !diff_only {
+        return Err("--diff-only must be set when using --start-commit-id".into());
+    }
+    if end_commit.is_some() && !diff_only {
+        return Err("--diff-only must be set when using --end-commit-id".into());
+    }
+    if end_commit.is_some() && start_commit.is_none() {
+        return Err("--start-commit-id must be set when using --end-commit-id".into());
+    }
+
     // Verify we're in a git repository
     let repo = match Repository::open(".") {
         Ok(repo) => repo,

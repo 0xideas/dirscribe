@@ -372,39 +372,41 @@ fn validate_git_args(
     }
 
     // Verify we're in a git repository
-    let repo = match Repository::open(".") {
-        Ok(repo) => repo,
-        Err(_) => return Err("Not a git repository".into()),
-    };
+    if diff_only {
+        let repo = match Repository::open(".") {
+            Ok(repo) => repo,
+            Err(_) => return Err("Not a git repository".into()),
+        };
 
-    if let Some(start) = start_commit {
-        validate_commit(&repo, start, "start_commit_id")?;
-    }
-
-    if let Some(end) = end_commit {
-        validate_commit(&repo, end, "end_commit_id")?;
-    }
-
-    // If both commits provided, verify start is ancestor of end
-    if let (Some(start), Some(end)) = (start_commit, end_commit) {
-        let start_commit = repo
-            .revparse_single(start)
-            .map_err(|_| format!("Invalid start commit: {}", start))?
-            .peel_to_commit()
-            .map_err(|_| "Failed to parse start commit".to_string())?;
-
-        let end_commit = repo
-            .revparse_single(end)
-            .map_err(|_| format!("Invalid end commit: {}", end))?
-            .peel_to_commit()
-            .map_err(|_| "Failed to parse end commit".to_string())?;
-
-        if !repo.graph_descendant_of(end_commit.id(), start_commit.id())
-            .map_err(|_| "Failed to check commit relationship".to_string())? {
-            return Err("start_commit_id must be an ancestor of end_commit_id".into());
+        if let Some(start) = start_commit {
+            validate_commit(&repo, start, "start_commit_id")?;
         }
-    }
 
+        if let Some(end) = end_commit {
+            validate_commit(&repo, end, "end_commit_id")?;
+        }
+
+        // If both commits provided, verify start is ancestor of end
+        if let (Some(start), Some(end)) = (start_commit, end_commit) {
+            let start_commit = repo
+                .revparse_single(start)
+                .map_err(|_| format!("Invalid start commit: {}", start))?
+                .peel_to_commit()
+                .map_err(|_| "Failed to parse start commit".to_string())?;
+
+            let end_commit = repo
+                .revparse_single(end)
+                .map_err(|_| format!("Invalid end commit: {}", end))?
+                .peel_to_commit()
+                .map_err(|_| "Failed to parse end commit".to_string())?;
+
+            if !repo.graph_descendant_of(end_commit.id(), start_commit.id())
+                .map_err(|_| "Failed to check commit relationship".to_string())? {
+                return Err("start_commit_id must be an ancestor of end_commit_id".into());
+            }
+        }
+
+    }
     Ok(())
 }
 

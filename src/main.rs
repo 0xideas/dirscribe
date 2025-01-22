@@ -3,10 +3,12 @@ mod cli;
 mod git;
 mod file_processing;
 mod output;
+mod validation;
 use cli::Cli;
 use file_processing::process_directory;
 use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
+use validation::validate_cli_args;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -14,6 +16,11 @@ use std::path::PathBuf;
 
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
+
+    if let Err(e) = validate_cli_args(&cli) {
+        eprintln!("Error: {}", e.message);
+        std::process::exit(1);
+    }
     
     let suffixes: Vec<String> = cli.suffixes.split(',').map(String::from).collect();
     

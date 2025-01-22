@@ -34,9 +34,10 @@ dirscribe md,py,Dockerfile
 dirscribe "*"
 ```
 
-### Demo
+### Demo (on Youtube)
 <video src="https://www.youtube.com/watch?v=rkXIZi1i3HI&t=7s" width="500" />
 
+[![Video showing how to use dirscribe](assets/public/thumbnail.jpg)](https://www.youtube.com/watch?v=rkXIZi1i3HI&t)
 
 ### Options
 

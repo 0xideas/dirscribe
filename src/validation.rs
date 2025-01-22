@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::io;
+use crate::cli::Cli;
 use git2::Repository;
-use cli::Cli;
 
-
+#[derive(Debug)]
 pub struct ValidationError {
     pub message: String,
 }
@@ -11,6 +10,13 @@ pub struct ValidationError {
 impl From<String> for ValidationError {
     fn from(message: String) -> Self {
         ValidationError { message }
+    }
+}
+
+// Add implementation for &str
+impl From<&str> for ValidationError {
+    fn from(message: &str) -> Self {
+        ValidationError { message: message.to_string() }
     }
 }
 
@@ -86,8 +92,8 @@ fn validate_template_path(path: &str) -> Result<(), ValidationError> {
 
     // Check file size (e.g., max 1MB)
     if let Ok(metadata) = path.metadata() {
-        if metadata.len() > 1_000_000 {
-            return Err("Template file is too large (max 1MB)".into());
+        if metadata.len() > 100_000_000 {
+            return Err("Template file is too large (max 100MB)".into());
         }
     }
 
@@ -136,16 +142,16 @@ fn validate_git_args(
             .revparse_single(start)
             .map_err(|_| format!("Invalid start commit: {}", start))?
             .peel_to_commit()
-            .map_err(|_| "Failed to parse start commit")?;
+            .map_err(|_| "Failed to parse start commit".to_string())?;
 
         let end_commit = repo
             .revparse_single(end)
             .map_err(|_| format!("Invalid end commit: {}", end))?
             .peel_to_commit()
-            .map_err(|_| "Failed to parse end commit")?;
+            .map_err(|_| "Failed to parse end commit".to_string())?;
 
         if !repo.graph_descendant_of(end_commit.id(), start_commit.id())
-            .map_err(|_| "Failed to check commit relationship")? {
+            .map_err(|_| "Failed to check commit relationship".to_string())? {
             return Err("start_commit_id must be an ancestor of end_commit_id".into());
         }
     }
@@ -213,7 +219,10 @@ fn validate_path_filters(
             })?;
 
             // Verify path is within project directory
-            let current_dir = std::env::current_dir().map_err(|_| "Failed to get current directory")?;
+            let current_dir = std::env::current_dir().map_err(|_| 
+                "Failed to get current directory".to_string()
+            )?;
+            
             if !normalized.starts_with(current_dir) {
                 return Err(format!("Path is outside project directory: {}", path.display()).into());
             }

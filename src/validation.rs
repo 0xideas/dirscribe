@@ -59,6 +59,10 @@ fn validate_suffixes(suffixes: &str) -> Result<(), ValidationError> {
         return Err("Suffixes cannot be empty".into());
     }
 
+    if suffixes == "*" {
+        return Ok(());
+    }
+
     let parts: Vec<&str> = suffixes.split(',').collect();
     
     for suffix in parts {

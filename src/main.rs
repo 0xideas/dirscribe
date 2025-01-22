@@ -21,6 +21,11 @@ fn main() -> io::Result<()> {
         eprintln!("Error: {}", e.message);
         std::process::exit(1);
     }
+
+    assert!(
+        cli.suffixes == "*" || !cli.suffixes.chars().any(|s| s == '*'),
+        "\"*\" can only be used alone, file extensions are specified without wildcard, like 'py,toml,js'"
+    );
     
     let suffixes: Vec<String> = cli.suffixes.split(',').map(String::from).collect();
     

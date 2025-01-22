@@ -68,17 +68,20 @@ pub fn process_directory(
                 // Split file matching into two cases:
                 // 1. Files with extensions matching suffixes
                 // 2. Exact filename matches (like "Dockerfile")
-                let should_include = if let Some(file_suffix) = path.extension() {
-                    // Case 1: Check if extension matches any suffix
+            
+                let should_include = if suffixes.contains(&"*".to_string()) {
+                    // If wildcard is specified, check if it's a text-like file
+                    is_likely_text_file(path)
+                } else if let Some(file_suffix) = path.extension() {
                     suffixes.iter().any(|s| s == file_suffix.to_str().unwrap_or(""))
                 } else {
-                    // Case 2: For files without extensions, check if the full filename matches any suffix
                     if let Some(filename) = path.file_name() {
                         suffixes.iter().any(|s| s == filename.to_str().unwrap_or(""))
                     } else {
                         false
                     }
                 };
+                
 
                 if should_include {
                     // Get relative path from base directory
@@ -293,4 +296,60 @@ pub fn should_include_file(
     }
 
     Ok(true)
+}
+
+// Add this function at the top of file_processing.rs
+fn is_likely_text_file(path: &Path) -> bool {
+    // Common text file extensions
+    const TEXT_EXTENSIONS: &[&str] = &[
+        // Programming languages
+        "rs", "py", "js", "ts", "java", "c", "cpp", "h", "hpp", "cs", "go", "rb", "php", "swift",
+        "kt", "scala", "sh", "bash", "pl", "r", "sql", "m", "mm",
+        // Web
+        "html", "htm", "css", "scss", "sass", "less", "xml", "svg",
+        // Data formats
+        "json", "yaml", "yml", "toml", "ini", "conf", "config",
+        // Documentation
+        "md", "markdown", "txt", "rtf", "rst", "asciidoc", "adoc",
+        // Config files
+        "gitignore", "env", "dockerignore", "editorconfig",
+        // Build files
+        "cmake", "make", "mak", "gradle",
+    ];
+
+    // Always consider files without extension that are commonly text
+    const EXTENSION_LESS_TEXT_FILES: &[&str] = &[
+        "Dockerfile", "Makefile", "README", "LICENSE", "Cargo.lock", "package.json",
+        ".gitignore", ".env", ".dockerignore", ".editorconfig"
+    ];
+
+    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+        // Check extension-less files first
+        if EXTENSION_LESS_TEXT_FILES.contains(&file_name) {
+            return true;
+        }
+    }
+
+    // Check file extension
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        if TEXT_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
+            return true;
+        }
+    }
+
+    // For files without extension or unknown extensions, try to read a small sample
+    // and check if it contains only valid UTF-8 text
+    if let Ok(file) = std::fs::File::open(path) {
+        use std::io::{Read, Seek, SeekFrom};
+        let mut buffer = [0u8; 1024];
+        let mut handle = file;
+        
+        // Read first 1024 bytes
+        if handle.read(&mut buffer).is_ok() {
+            // Check if content is valid UTF-8
+            return String::from_utf8(buffer.to_vec()).is_ok();
+        }
+    }
+
+    false
 }

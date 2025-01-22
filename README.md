@@ -25,7 +25,7 @@ Basic syntax:
 dirscribe <comma_separated_suffixes_or_file_names_or_wildcard> [options]
 ```
 
-Example:
+Examples:
 ```bash
 dirscribe md,py,Dockerfile
 ```
@@ -33,6 +33,9 @@ dirscribe md,py,Dockerfile
 ```bash
 dirscribe "*"
 ```
+
+### Demo (on Youtube)
+[![Video showing how to use dirscribe](assets/public/thumbnail.jpg)](https://www.youtube.com/watch?v=rkXIZi1i3HI&t)
 
 ### Options
 

@@ -152,12 +152,20 @@ pub fn process_file(
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
 ) -> io::Result<()> {
-    // Get the relative path from the repository root
-    let repo_path = repo.map(|r| r.path().parent().unwrap_or(Path::new("")).to_path_buf())
-        .unwrap_or_else(|| PathBuf::from(""));
-    let relative_path = file_path.strip_prefix(&repo_path)
-        .unwrap_or(file_path)
-        .to_path_buf();
+    // Get the repository root path and normalize the relative path
+    let relative_path = if let Some(repo) = repo {
+        let repo_workdir = repo.workdir().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Could not get repository working directory")
+        })?;
+        
+        let full_path = fs::canonicalize(file_path)?;
+        let relative_path = full_path.strip_prefix(fs::canonicalize(repo_workdir)?)
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "File not in repository"))?;
+            
+        relative_path.to_path_buf()
+    } else {
+        file_path.clone()
+    };
 
     // Helper function to get blob content from a specific commit
     let get_file_at_commit = |commit_id: &str| -> io::Result<String> {
@@ -173,8 +181,12 @@ pub fn process_file(
         let tree = commit.tree()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
             
-        let entry = tree.get_path(&relative_path)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
+        // Convert the path to a string without leading ./ and replace Windows-style paths
+        let path_str = relative_path.to_string_lossy()
+            .replace('\\', "/");
+            
+        let entry = tree.get_path(Path::new(&path_str))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to get path '{}': {}", path_str, e.message())))?;
             
         let blob = entry.to_object(repo)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;

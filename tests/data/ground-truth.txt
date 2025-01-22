@@ -34,12 +34,16 @@ cargo install dirscribe
 
 Basic syntax:
 ```bash
-dirscribe <comma_separated_suffixes_or_file_names> [options]
+dirscribe <comma_separated_suffixes_or_file_names_or_wildcard> [options]
 ```
 
 Example:
 ```bash
 dirscribe md,py,Dockerfile
+```
+
+```bash
+dirscribe "*"
 ```
 
 ### Options

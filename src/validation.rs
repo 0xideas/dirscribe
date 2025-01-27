@@ -2,6 +2,31 @@ use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 use git2::Repository;
 use anyhow::{Result, Context, bail};
+use std::error::Error;
+use std::fmt;
+
+#[derive(Debug)]
+pub struct ValidationError(String);
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Error for ValidationError {}
+
+impl From<String> for ValidationError {
+    fn from(msg: String) -> Self {
+        ValidationError(msg)
+    }
+}
+
+impl From<&str> for ValidationError {
+    fn from(msg: &str) -> Self {
+        ValidationError(msg.to_string())
+    }
+}
 
 pub fn validate_cli_args(cli: &Cli) -> Result<()> {
     // Validate suffixes

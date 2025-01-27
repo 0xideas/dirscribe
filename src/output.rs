@@ -1,5 +1,5 @@
 use std::fs;
-use anyhow::{Result, Context};
+use anyhow::{Result, Context, bail};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub fn write_to_clipboard(content: &str) -> Result<()> {

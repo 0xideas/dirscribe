@@ -1,6 +1,6 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, Error};
 use std::env;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,19 +35,33 @@ struct ResponseMessage {
 }
 
 pub async fn get_summaries(valid_files: Vec<String>, file_contents: HashMap<String, String>, prompt_template: String) -> Result<Vec<String>> {
-    let semaphore = Arc::new(Semaphore::new(10)); // Assuming we want to keep the concurrency limit
+    let semaphore = Arc::new(Semaphore::new(10));
     
-    let results: Vec<String> = valid_files.par_iter().map(|file_path| {
-        let permit = semaphore.clone().try_acquire_owned().unwrap();
-        let content = file_contents.get(file_path).unwrap_or(&String::new()).clone();
-        let result = get_summary(content, prompt_template.clone());
-        drop(permit);
-        match result.await {
-            Ok(summary) => summary,
-            Err(e) => format!("Error processing file {}: {}", file_path, e)
-        }
-    }).collect();
-
+    let mut handles = Vec::new();
+    
+    for file_path in valid_files {
+        let permit = semaphore.clone().acquire_owned().await?;
+        let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
+        let template = prompt_template.clone();
+        let file_path_clone = file_path.clone();
+        
+        let handle = tokio::spawn(async move {
+            let result = get_summary(content, template).await;
+            drop(permit);
+            match result {
+                Ok(summary) => summary,
+                Err(e) => format!("Error processing file {}: {}", file_path_clone, e)
+            }
+        });
+        
+        handles.push(handle);
+    }
+    
+    let mut results = Vec::new();
+    for handle in handles {
+        results.push(handle.await?);
+    }
+    
     Ok(results)
 }
 

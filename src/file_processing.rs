@@ -69,7 +69,9 @@ pub fn process_directory(
                 // 1. Files with extensions matching suffixes
                 // 2. Exact filename matches (like "Dockerfile")
             
-                let should_include = if suffixes.contains(&"*".to_string()) {
+                let should_include = if path.is_dir() {
+                    false
+                } else if suffixes.contains(&"*".to_string()) {
                     // If wildcard is specified, check if it's a text-like file
                     is_likely_text_file(path)
                 } else if let Some(file_suffix) = path.extension() {
@@ -106,7 +108,7 @@ pub fn process_directory(
                         }
 
                         // Check keyword filters before adding to valid files
-                        if should_include_file(
+                        if check_for_keywords(
                             &path.to_path_buf(),
                             or_keywords,
                             and_keywords,
@@ -266,12 +268,14 @@ pub fn process_file(
     Ok(())
 }
 
-pub fn should_include_file(
+pub fn check_for_keywords(
     file_path: &PathBuf,
     or_keywords: &[String],
     and_keywords: &[String],
     exclude_keywords: &[String],
 ) -> io::Result<bool> {
+
+
     let contents = fs::read_to_string(file_path)?;
 
     // Check exclude keywords - skip if any are present

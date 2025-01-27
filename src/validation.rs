@@ -1,26 +1,9 @@
 use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 use git2::Repository;
+use anyhow::{Result, Context, bail};
 
-#[derive(Debug)]
-pub struct ValidationError {
-    pub message: String,
-}
-
-impl From<String> for ValidationError {
-    fn from(message: String) -> Self {
-        ValidationError { message }
-    }
-}
-
-// Add implementation for &str
-impl From<&str> for ValidationError {
-    fn from(message: &str) -> Self {
-        ValidationError { message: message.to_string() }
-    }
-}
-
-pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
+pub fn validate_cli_args(cli: &Cli) -> Result<()> {
     // Validate suffixes
     validate_suffixes(&cli.suffixes)?;
 
@@ -56,7 +39,7 @@ pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
 
 fn validate_suffixes(suffixes: &str) -> Result<(), ValidationError> {
     if suffixes.is_empty() {
-        return Err("Suffixes cannot be empty".into());
+        bail!("Suffixes cannot be empty");
     }
 
     if suffixes == "*" {

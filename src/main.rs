@@ -11,13 +11,14 @@ use file_processing::process_directory;
 use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
 use validation::validate_cli_args;
-use std::io::{self, Write};
+use anyhow::{Result, Context};
+use std::io::Write;
 use std::path::PathBuf;
 use prompt_handling::load_prompts;
 
 
 
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     assert!(

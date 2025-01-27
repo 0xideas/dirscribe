@@ -76,12 +76,17 @@ fn main() -> io::Result<()> {
         })
         .unwrap_or_default();
 
+
+    let file_path = Path::new("prompts/summary-0.1.txt");
+    // Read the file contents into a String
+    let summarize_prompt_template = fs::read_to_string(file_path)?;
     // Process directory and get the content string
     let content = process_directory(
         ".",
         &suffixes,
         cli.dont_use_gitignore,
         cli.summarize,
+        summarize_prompt_template,
         cli.apply,
         cli.diff_only,
         &exclude_paths,

@@ -32,3 +32,7 @@ similar = "2.2"
 [[bin]]
 name = "dirscribe"
 path = "src/main.rs"
+
+[build]
+# Include all files in the resources directory
+include = ["prompts/**/*"]

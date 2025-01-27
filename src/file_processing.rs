@@ -5,6 +5,7 @@ use ignore::WalkBuilder;
 use git2::{Repository, Tree};
 use tokio::sync::Semaphore;
 use std::sync::Arc;
+use rayon::prelude::*; // Added missing import for parallel iteration
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
 mod summary;
 use summary::get_summary;
@@ -14,6 +15,7 @@ pub fn process_directory(
     suffixes: &[String],
     dont_use_gitignore: bool,
     summarize: bool,
+    summarize_prompt_template: &String,
     apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
@@ -71,10 +73,6 @@ pub fn process_directory(
                     }
                 }
 
-                // Split file matching into two cases:
-                // 1. Files with extensions matching suffixes
-                // 2. Exact filename matches (like "Dockerfile")
-            
                 let should_include = if path.is_dir() {
                     false
                 } else if suffixes.contains(&"*".to_string()) {
@@ -89,7 +87,6 @@ pub fn process_directory(
                         false
                     }
                 };
-                
 
                 if should_include {
                     // Get relative path from base directory
@@ -145,50 +142,50 @@ pub fn process_directory(
     // Process each file
     let semaphore = Arc::new(Semaphore::new(5));
 
-    let strings = valid_files.par_iter().par_iter().map(|file_path| {
+    let strings: Vec<String> = valid_files.par_iter().map(|file_path| { // Fixed double par_iter() and collect type
         let permit = semaphore.clone().try_acquire_owned().unwrap();
         let result = process_file(
             file_path,
             summarize,
+            summarize_prompt_template,
             diff_only,
             repo.as_ref(),
             start_commit_id,
             end_commit_id
         );
-        // Permit is automatically released when dropped
         drop(permit);
-        result
-    }).collect()?;
+        result.unwrap_or_else(|e| format!("Error processing file: {}", e))
+    }).collect();
 
-    let strings2 = if (summarize) {
+    // Fixed incorrect parameter order and brace style
+    let strings2: Vec<String> = if summarize {
         valid_files.iter().zip(strings).map(|(file, s)| 
-            format!("\nSummary of {}:\n\n{}\n", file, s))
-    } else if (!diff_only) {
+            format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect()
+    } else if diff_only {
         valid_files.iter().zip(strings).map(|(file, s)| 
-            format!("\nFile Content of {}:\n\n{}\n", file, s))
+            format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect()
     } else {
         valid_files.iter().zip(strings).map(|(file, s)| 
-            format!("\nDiff of {}:\n\n{}\n", file, s))
-    }
+            format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect()
+    };
 
     for string in strings2 {
         write!(output, "{}", string)?;
     }
     
-    // Convert the output buffer to a string
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 pub fn process_file(
     file_path: &PathBuf,
+    summarize: bool, // Fixed parameter order to match usage
+    summarize_prompt_template: &String,
     diff_only: bool,
-    summarize: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
 ) -> io::Result<String> {
-    // Get the repository root path and normalize the relative path
     let relative_path = if let Some(repo) = repo {
         let repo_workdir = repo.workdir().ok_or_else(|| {
             io::Error::new(io::ErrorKind::Other, "Could not get repository working directory")
@@ -203,7 +200,6 @@ pub fn process_file(
         file_path.clone()
     };
 
-    // Helper function to get blob content from a specific commit
     let get_file_at_commit = |commit_id: &str| -> io::Result<String> {
         let repo = repo.ok_or_else(|| {
             io::Error::new(io::ErrorKind::Other, "Repository not available")
@@ -217,7 +213,6 @@ pub fn process_file(
         let tree = commit.tree()
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
             
-        // Convert the path to a string without leading ./ and replace Windows-style paths
         let path_str = relative_path.to_string_lossy()
             .replace('\\', "/");
             
@@ -234,26 +229,18 @@ pub fn process_file(
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     };
 
-    // Read file contents based on provided commit IDs
     let contents = if let Some(end_id) = end_commit_id {
-        // If end_commit_id is provided, read from that commit
         get_file_at_commit(end_id)?
     } else {
-        // Otherwise read from current state
         fs::read_to_string(file_path)?
     };
-    
 
-
-    if {summarize}{
-        let summary = get_summary(contents);
-        Ok(summary)
+    if summarize {
+        Ok(get_summary(&contents, &summarize_prompt_template)) // Fixed to pass contents by reference
     } else if !diff_only {
         Ok(contents)
     } else {
         if let Some(repo) = repo {
-            
-            // Helper function to get tree from commit ID
             let get_tree = |commit_id: &str| -> io::Result<Tree> {
                 repo.revparse_single(commit_id)
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?
@@ -292,11 +279,13 @@ pub fn process_file(
             }.map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
 
             let diff_str = get_diff_str(&diff)?;
-            let filtered_diff = filter_diff_for_file(&diff_str, file_path);
-            Ok(filtered_diff);
+            Ok(filter_diff_for_file(&diff_str, file_path)) // Removed unnecessary semicolon
+        } else {
+            Ok(String::new()) // Added else branch for when repo is None
         }
     }
 }
+
 
 pub fn check_for_keywords(
     file_path: &PathBuf,

@@ -10,17 +10,15 @@ use tokio::sync::Semaphore;
 use backoff::{ExponentialBackoff, retry};
 
 const API_TIMEOUT_SECONDS: u64 = 30;
-const MAX_RETRIES: u32 = 3;
+const MAX_RETRIES: u32 = 1;
 const MAX_CONCURRENT_REQUESTS: usize = 5;
-const API_VERSION: &str = "v1";
 const DEFAULT_MODEL: &str = "deepseek-chat";
 const MAX_INPUT_LENGTH: usize = 4096;  // Example limit, check actual API docs
 
 #[derive(Debug, Serialize)]
 struct DeepseekRequest {
     model: String,
-    messages: Vec<Message>,
-    temperature: f32,
+    messages: Vec<Message>
 }
 
 #[derive(Debug, Serialize)]
@@ -76,7 +74,7 @@ impl DeepseekClient {
             client,
             api_key,
             model: DEFAULT_MODEL.to_string(),
-            base_url: format!("https://api.deepseek.com/{}/chat/completions", API_VERSION),
+            base_url: format!("https://api.deepseek.com/chat/completions"),
         })
     }
 
@@ -121,7 +119,7 @@ impl DeepseekClient {
         }
 
         // Replace placeholder in template
-        let prompt = prompt_template.replace("${{${{CONTENT}}$}}$", text);
+        let prompt = prompt_template.replace("${${CONTENT}$}$", text);
 
         // Construct request
         let request = DeepseekRequest {
@@ -129,15 +127,17 @@ impl DeepseekClient {
             messages: vec![Message {
                 role: "user".to_string(),
                 content: prompt,
-            }],
-            temperature: 0.7,
+            }]
         };
 
-        // Print request details
-        println!("\n=== Sending request to Deepseek API ===");
-        println!("URL: {}", self.base_url);
-        println!("Request body: {}", serde_json::to_string_pretty(&request)
-            .unwrap_or_else(|_| String::from("Failed to serialize request")));
+        // Generate and print curl command
+        let request_body = serde_json::to_string(&request)
+            .unwrap_or_else(|_| String::from("{}"));
+            
+        println!("\ncurl -X POST '{}' \\", self.base_url);
+        println!("  -H 'Authorization: Bearer {}' \\", self.api_key);
+        println!("  -H 'Content-Type: application/json' \\");
+        println!("  -d '{}'", request_body.replace("'", "'\"'\"'"));
             
         // Send request
         let response = self.client

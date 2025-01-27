@@ -64,7 +64,7 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
 
 fn validate_suffixes(suffixes: &str) -> Result<(), ValidationError> {
     if suffixes.is_empty() {
-        ValidationError("Suffixes cannot be empty");
+        return Err(ValidationError("Suffixes cannot be empty".to_string()));
     }
 
     if suffixes == "*" {

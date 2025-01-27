@@ -19,7 +19,7 @@ pub fn process_with_template(content: &str, template_path: &str) -> Result<Strin
 
     // Check for the required placeholder
     if !template.contains("${${CONTENT}$}$") {
-        bail!("Template file must contain the placeholder '${${CONTENT}$}$'");
+        bail!("Template file must contain the placeholder '${{${{CONTENT}}$}}$'");
     }
 
     // Replace the placeholder with the content

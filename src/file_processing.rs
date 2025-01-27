@@ -165,10 +165,14 @@ pub fn process_directory(
     );
 
     let result = if summarize {
+        let valid_file_strings: Vec<String> = valid_files.iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+            
         let summaries = if !diff_only {
-            get_summaries(valid_files, file_contents, summarize_prompt_templates["summary-0.1.txt"]);
+            get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-0.1.txt"].clone())
         } else {
-            get_summaries(valid_files, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"]);
+            get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"].clone())
         };
         valid_files.iter().zip(summaries).map(|(file, s)| 
             format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect();

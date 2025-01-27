@@ -157,7 +157,7 @@ pub async fn process_directory(
         })
         .collect();
 
-    let result = if summarize {
+    let result: String = if summarize {
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
@@ -167,14 +167,20 @@ pub async fn process_directory(
         } else {
             get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
         };
-        valid_files.iter().zip(summaries.iter()).map(|(file, s)| 
-            format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect();
+        valid_files.iter().zip(summaries.iter())
+            .map(|(file, s)| format!("\nSummary of {}:\n\n{}\n", file.display(), s))
+            .collect::<Vec<String>>()
+            .join("")
     } else if diff_only {
-        valid_files.iter().zip(file_contents.values()).map(|(file, s)| 
-            format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect()
+        valid_files.iter().zip(file_contents.values())
+            .map(|(file, s)| format!("\nDiff of {}:\n\n{}\n", file.display(), s))
+            .collect::<Vec<String>>()
+            .join("")
     } else {
-        valid_files.iter().zip(file_contents.values()).map(|(file, s)| 
-            format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect()
+        valid_files.iter().zip(file_contents.values())
+            .map(|(file, s)| format!("\nFile Content of {}:\n\n{}\n", file.display(), s))
+            .collect::<Vec<String>>()
+            .join("")
     };
 
     for string in result {

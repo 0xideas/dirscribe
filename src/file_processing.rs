@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
+use std::collections::HashMap;
 use git2::{Repository, Tree};
 use tokio::sync::Semaphore;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ pub fn process_directory(
     suffixes: &[String],
     dont_use_gitignore: bool,
     summarize: bool,
-    summarize_prompt_templates: HashMap<String, String,
+    summarize_prompt_templates: HashMap<String, String>,
     apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
@@ -180,7 +181,7 @@ pub fn process_directory(
 pub fn process_file(
     file_path: &PathBuf,
     summarize: bool, // Fixed parameter order to match usage
-    summarize_prompt_template: HashMap<String, String>    ,
+    summarize_prompt_templates: HashMap<String, String>    ,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
@@ -246,7 +247,7 @@ pub fn process_file(
         } else {
             String::new() // Added else branch for when repo is None
         }
-    }
+    };
 
     if summarize {
         if !diff_only{

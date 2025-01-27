@@ -1,10 +1,10 @@
 use std::fs;
 use std::fs::File;
 mod cli;
-mod io;
 mod git;
 mod file_processing;
 mod output;
+mod prompt_handling;
 mod summary; 
 mod validation;
 use cli::Cli;
@@ -14,7 +14,7 @@ use clap::Parser;
 use validation::validate_cli_args;
 use std::io::{self, Write};
 use std::path::{PathBuf, Path};
-use io:load_prompts;
+use prompt_handling::load_prompts;
 
 
 
@@ -81,7 +81,7 @@ fn main() -> io::Result<()> {
         .unwrap_or_default();
 
     // Read the file contents into a String
-    let summarize_prompt_templates = load_prompts("prompts")
+    let summarize_prompt_templates = load_prompts("prompts");
     // Process directory and get the content string
     let content = process_directory(
         ".",

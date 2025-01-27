@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-fn load_prompts(dir: &str) -> std::io::Result<HashMap<String, String>> {
+pub fn load_prompts(dir: &str) -> std::io::Result<HashMap<String, String>> {
     Ok(fs::read_dir(dir)?
         .filter_map(Result::ok)
         .filter(|e| e.path().is_file())

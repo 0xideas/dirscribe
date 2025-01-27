@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     );
 
     if let Err(e) = validate_cli_args(&cli) {
-        eprintln!("Error: {}", e.message);
+        eprintln!("Error: {}", e);
         std::process::exit(1);
     }
 
@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
         .unwrap_or_default();
 
     // Read the file contents into a String
-    let summarize_prompt_templates = load_prompts("prompts");
+    let summarize_prompt_templates = load_prompts("prompts").context("Failed to load prompt templates")?;
     // Process directory and get the content string
     let content = process_directory(
         ".",

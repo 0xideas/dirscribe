@@ -18,7 +18,8 @@ use prompt_handling::load_prompts;
 
 
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     assert!(
@@ -98,7 +99,7 @@ fn main() -> Result<()> {
         &exclude_keywords,
         cli.start_commit_id.as_deref(),
         cli.end_commit_id.as_deref()
-    )?;
+    ).await?;
 
     let final_content = if let Some(template_path) = cli.prompt_template_path {
         process_with_template(&content, &template_path)?

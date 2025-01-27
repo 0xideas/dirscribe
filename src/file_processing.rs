@@ -183,12 +183,11 @@ pub async fn process_directory(
             .join("")
     };
 
-    for string in result {
-        write!(output, "{}", string)?;
-    }
+    write!(output, "{}", result)?;
     
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        .map_err(Into::into)
 
 }
 

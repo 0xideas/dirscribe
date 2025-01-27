@@ -11,7 +11,7 @@ use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
 use crate::summary::get_summaries;
 
 
-pub fn process_directory(
+pub async fn process_directory(
     dir_path: &str,
     suffixes: &[String],
     dont_use_gitignore: bool,
@@ -169,11 +169,11 @@ pub fn process_directory(
             .collect();
             
         let summaries = if !diff_only {
-            get_summaries(valid_file_strings.clone(), file_contents, summarize_prompt_templates["summary-0.1.txt"].clone())
+            get_summaries(valid_file_strings.clone(), file_contents, summarize_prompt_templates["summary-0.1.txt"].clone()).await?
         } else {
-            get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"].clone())
+            get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
         };
-        valid_files.iter().zip(summaries).map(|(file, s)| 
+        valid_files.iter().zip(summaries.iter()).map(|(file, s)| 
             format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect();
     } else if diff_only {
         valid_files.iter().zip(file_contents).map(|(file, s)| 

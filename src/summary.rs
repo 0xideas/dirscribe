@@ -1,5 +1,6 @@
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use anyhow::{Context, Result, bail};
 use std::env;
 use std::collections::HashMap;
@@ -120,7 +121,7 @@ impl DeepseekClient {
         }
 
         // Replace placeholder in template
-        let prompt = prompt_template.replace("{text}", text);
+        let prompt = prompt_template.replace("${{${{CONTENT}}$}}$", text);
 
         // Construct request
         let request = DeepseekRequest {
@@ -132,6 +133,12 @@ impl DeepseekClient {
             temperature: 0.7,
         };
 
+        // Print request details
+        println!("\n=== Sending request to Deepseek API ===");
+        println!("URL: {}", self.base_url);
+        println!("Request body: {}", serde_json::to_string_pretty(&request)
+            .unwrap_or_else(|_| String::from("Failed to serialize request")));
+            
         // Send request
         let response = self.client
             .post(&self.base_url)
@@ -140,6 +147,9 @@ impl DeepseekClient {
             .send()
             .await
             .context("Failed to send request to Deepseek API")?;
+            
+        println!("\n=== Received response ===");
+        println!("Status: {}", response.status());
 
         // Handle different status codes
         match response.status() {

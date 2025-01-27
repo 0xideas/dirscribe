@@ -1,5 +1,6 @@
 use std::fs;
 use std::io::{self, Write, Cursor};
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
@@ -26,14 +27,12 @@ pub async fn process_directory(
     exclude_keywords: &[String],
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
-) -> io::Result<String> {
+) -> anyhow::Result<String> {
     let mut output = Cursor::new(Vec::new());
     let dir_path = Path::new(dir_path);
     
     let repo = if diff_only {
-        Some(Repository::open(dir_path).map_err(|e| 
-            io::Error::new(io::ErrorKind::Other, e.message().to_string())
-        )?)
+        Some(Repository::open(dir_path).context("Failed to open git repository")?)
     } else {
         None
     };

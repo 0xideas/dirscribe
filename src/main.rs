@@ -1,4 +1,3 @@
-use std::fs;
 use std::fs::File;
 mod cli;
 mod git;
@@ -13,7 +12,7 @@ use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
 use validation::validate_cli_args;
 use std::io::{self, Write};
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
 use prompt_handling::load_prompts;
 
 

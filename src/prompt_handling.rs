@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 
 pub fn load_prompts(dir: &str) -> std::io::Result<HashMap<String, String>> {
     Ok(fs::read_dir(dir)?

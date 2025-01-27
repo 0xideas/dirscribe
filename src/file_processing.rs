@@ -133,7 +133,6 @@ pub async fn process_directory(
     }
     writeln!(output)?;
 
-
     let file_contents: HashMap<String, String> = valid_files
         .iter()
         .filter_map(|file_path| {
@@ -156,28 +155,41 @@ pub async fn process_directory(
         })
         .collect();
 
-    let result: String = if summarize {
+    // Generate output string maintaining file path order
+    let result = if summarize {
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
             
         let summaries = if !diff_only {
-            get_summaries(valid_file_strings.clone(), file_contents, summarize_prompt_templates["summary-0.1.txt"].clone()).await?
+            get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1.txt"].clone()).await?
         } else {
-            get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
         };
+        
+        // Use the original valid_files order
         valid_files.iter().zip(summaries.iter())
-            .map(|(file, s)| format!("\nSummary of {}:\n\n{}\n", file.display(), s))
+            .map(|(file, summary)| {
+                format!("\nSummary of {}:\n\n{}\n", file.display(), summary)
+            })
             .collect::<Vec<String>>()
             .join("")
     } else if diff_only {
-        valid_files.iter().zip(file_contents.values())
-            .map(|(file, s)| format!("\nDiff of {}:\n\n{}\n", file.display(), s))
+        valid_files.iter()
+            .filter_map(|file| {
+                let path_string = file.to_string_lossy().into_owned();
+                file_contents.get(&path_string)
+                    .map(|content| format!("\nDiff of {}:\n\n{}\n", file.display(), content))
+            })
             .collect::<Vec<String>>()
             .join("")
     } else {
-        valid_files.iter().zip(file_contents.values())
-            .map(|(file, s)| format!("\nFile Content of {}:\n\n{}\n", file.display(), s))
+        valid_files.iter()
+            .filter_map(|file| {
+                let path_string = file.to_string_lossy().into_owned();
+                file_contents.get(&path_string)
+                    .map(|content| format!("\nFile Content of {}:\n\n{}\n", file.display(), content))
+            })
             .collect::<Vec<String>>()
             .join("")
     };
@@ -187,7 +199,6 @@ pub async fn process_directory(
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
         .map_err(Into::into)
-
 }
 
 pub fn process_file(

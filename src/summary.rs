@@ -130,13 +130,12 @@ impl DeepseekClient {
             }]
         };
 
-        // Generate and print curl command
         let request_body = serde_json::to_string(&request)
             .unwrap_or_else(|_| String::from("{}"));
             
-        println!("\ncurl -X POST '{}' \\", self.base_url);
-        println!("  -H 'Authorization: Bearer {}' \\", self.api_key);
-        println!("  -H 'Content-Type: application/json' \\");
+        println!("\ncurl -X POST \"{}\" \\", self.base_url);
+        println!("  -H \"Authorization: Bearer {}\" \\", self.api_key);
+        println!("  -H \"Content-Type: application/json\" \\");
         println!("  -d '{}'", request_body.replace("'", "'\"'\"'"));
             
         // Send request

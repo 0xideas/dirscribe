@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use anyhow::{Context, Result};
 use std::env;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 #[derive(Serialize)]
 struct DeepseekRequest {

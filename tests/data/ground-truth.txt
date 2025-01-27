@@ -1,15 +1,19 @@
 File Paths:
 ./README.md
+./src/prompt_handling.rs
 ./src/git.rs
 ./src/validation.rs
 ./src/output.rs
 ./src/main.rs
 ./src/file_processing.rs
 ./src/cli.rs
+./src/summary.rs
 
 File Contents:
 
-File: ./README.md
+
+File Content of ./README.md:
+
 # dirscribe
 
 A CLI tool that collects and combines files with specific extensions from a directory into a single output. The output is copied to the clipboard by default.
@@ -112,7 +116,28 @@ You can specify a template to embed the output in. The template should be a txt 
 MIT License
 
 
-File: ./src/git.rs
+File Content of ./src/prompt_handling.rs:
+
+use std::collections::HashMap;
+use std::fs;
+
+pub fn load_prompts(dir: &str) -> std::io::Result<HashMap<String, String>> {
+    Ok(fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .filter(|e| e.path().is_file())
+        .filter_map(|e| {
+            let path = e.path();
+            Some((
+                path.file_stem()?.to_str()?.to_string(),
+                fs::read_to_string(path).ok()?
+            ))
+        })
+        .collect())
+}
+
+
+File Content of ./src/git.rs:
+
 use std::io;
 use std::path::{Path, PathBuf};
 use git2::{Repository, Tree, Diff, DiffFormat};
@@ -238,30 +263,39 @@ pub fn filter_diff_for_file(diff_str: &str, file_path: &Path) -> String {
 }
 
 
-File: ./src/validation.rs
+File Content of ./src/validation.rs:
+
 use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 use git2::Repository;
+use anyhow::Result;
+use std::error::Error;
+use std::fmt;
 
 #[derive(Debug)]
-pub struct ValidationError {
-    pub message: String,
+pub struct ValidationError(String);
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
+
+impl Error for ValidationError {}
 
 impl From<String> for ValidationError {
-    fn from(message: String) -> Self {
-        ValidationError { message }
+    fn from(msg: String) -> Self {
+        ValidationError(msg)
     }
 }
 
-// Add implementation for &str
 impl From<&str> for ValidationError {
-    fn from(message: &str) -> Self {
-        ValidationError { message: message.to_string() }
+    fn from(msg: &str) -> Self {
+        ValidationError(msg.to_string())
     }
 }
 
-pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
+pub fn validate_cli_args(cli: &Cli) -> Result<()> {
     // Validate suffixes
     validate_suffixes(&cli.suffixes)?;
 
@@ -297,7 +331,7 @@ pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
 
 fn validate_suffixes(suffixes: &str) -> Result<(), ValidationError> {
     if suffixes.is_empty() {
-        return Err("Suffixes cannot be empty".into());
+        return Err(ValidationError("Suffixes cannot be empty".to_string()));
     }
 
     if suffixes == "*" {
@@ -508,44 +542,31 @@ fn validate_path_filters(
     Ok(())
 }
 
-File: ./src/output.rs
+
+File Content of ./src/output.rs:
+
 use std::fs;
-use std::io;
+use anyhow::{Result, bail};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
-pub fn write_to_clipboard(content: &str) -> io::Result<()> {
-    let mut ctx: ClipboardContext = ClipboardProvider::new().map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to create clipboard context: {}", e)
-        )
-    })?;
+pub fn write_to_clipboard(content: &str) -> Result<()> {
+    let mut ctx: ClipboardContext = ClipboardProvider::new()
+        .map_err(|e| anyhow::anyhow!("Failed to create clipboard context: {}", e))?;
     
-    ctx.set_contents(content.to_owned()).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to set clipboard contents: {}", e)
-        )
-    })?;
+    ctx.set_contents(content.to_owned())
+        .map_err(|e| anyhow::anyhow!("Failed to set clipboard contents: {}", e))?;
     
     Ok(())
 }
 
-pub fn process_with_template(content: &str, template_path: &str) -> io::Result<String> {
+pub fn process_with_template(content: &str, template_path: &str) -> Result<String> {
     // Read the template file
-    let template = fs::read_to_string(template_path).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to read template file: {}", e)
-        )
-    })?;
+    let template = fs::read_to_string(template_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read template file: {}", e))?;
 
     // Check for the required placeholder
     if !template.contains("${${CONTENT}$}$") {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Template file must contain the placeholder '${${CONTENT}$}$'"
-        ));
+        bail!("Template file must contain the placeholder '${{${{CONTENT}}$}}$'");
     }
 
     // Replace the placeholder with the content
@@ -553,24 +574,30 @@ pub fn process_with_template(content: &str, template_path: &str) -> io::Result<S
 }
 
 
-File: ./src/main.rs
+File Content of ./src/main.rs:
+
 use std::fs::File;
 mod cli;
 mod git;
 mod file_processing;
 mod output;
+mod prompt_handling;
+mod summary; 
 mod validation;
 use cli::Cli;
 use file_processing::process_directory;
 use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
 use validation::validate_cli_args;
-use std::io::{self, Write};
+use anyhow::{Result, Context};
+use std::io::Write;
 use std::path::PathBuf;
+use prompt_handling::load_prompts;
 
 
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     assert!(
@@ -579,7 +606,7 @@ fn main() -> io::Result<()> {
     );
 
     if let Err(e) = validate_cli_args(&cli) {
-        eprintln!("Error: {}", e.message);
+        eprintln!("Error: {}", e);
         std::process::exit(1);
     }
 
@@ -632,11 +659,16 @@ fn main() -> io::Result<()> {
         })
         .unwrap_or_default();
 
+    // Read the file contents into a String
+    let summarize_prompt_templates = load_prompts("prompts").context("Failed to load prompt templates")?;
     // Process directory and get the content string
     let content = process_directory(
         ".",
         &suffixes,
         cli.dont_use_gitignore,
+        cli.summarize,
+        summarize_prompt_templates,
+        cli.apply,
         cli.diff_only,
         &exclude_paths,
         &include_paths,
@@ -645,7 +677,7 @@ fn main() -> io::Result<()> {
         &exclude_keywords,
         cli.start_commit_id.as_deref(),
         cli.end_commit_id.as_deref()
-    )?;
+    ).await?;
 
     let final_content = if let Some(template_path) = cli.prompt_template_path {
         process_with_template(&content, &template_path)?
@@ -674,18 +706,26 @@ fn main() -> io::Result<()> {
 
 
 
-File: ./src/file_processing.rs
+File Content of ./src/file_processing.rs:
+
 use std::fs;
 use std::io::{self, Write, Cursor};
+use anyhow::Context;
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
+use std::collections::HashMap;
 use git2::{Repository, Tree};
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
+use crate::summary::get_summaries;
 
-pub fn process_directory(
+
+pub async fn process_directory(
     dir_path: &str,
     suffixes: &[String],
     dont_use_gitignore: bool,
+    summarize: bool,
+    summarize_prompt_templates: HashMap<String, String>,
+    _apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -694,23 +734,18 @@ pub fn process_directory(
     exclude_keywords: &[String],
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
-) -> io::Result<String> {
+) -> anyhow::Result<String> {
     let mut output = Cursor::new(Vec::new());
     let dir_path = Path::new(dir_path);
     
     let repo = if diff_only {
-        Some(Repository::open(dir_path).map_err(|e| 
-            io::Error::new(io::ErrorKind::Other, e.message().to_string())
-        )?)
+        Some(Repository::open(dir_path).context("Failed to open git repository")?)
     } else {
         None
     };
 
     if !dir_path.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Directory not found",
-        ));
+        return Err(anyhow::anyhow!("Directory not found"));
     }
 
     let mut diff_list = Vec::new();
@@ -742,10 +777,6 @@ pub fn process_directory(
                     }
                 }
 
-                // Split file matching into two cases:
-                // 1. Files with extensions matching suffixes
-                // 2. Exact filename matches (like "Dockerfile")
-            
                 let should_include = if path.is_dir() {
                     false
                 } else if suffixes.contains(&"*".to_string()) {
@@ -760,7 +791,6 @@ pub fn process_directory(
                         false
                     }
                 };
-                
 
                 if should_include {
                     // Get relative path from base directory
@@ -806,36 +836,91 @@ pub fn process_directory(
         writeln!(output, "{}", file_path.display())?;
     }
     writeln!(output)?;
-    writeln!(output, "File Contents:")?;
+    if !summarize {
+        writeln!(output, "File Contents:")?;
+    } else {
+        writeln!(output, "File Summaries:")?;
+    }
     writeln!(output)?;
 
-    // Process each file
-    for file_path in valid_files {
-        process_file(
-            &file_path,
-            &mut output,
-            diff_only,
-            repo.as_ref(),
-            start_commit_id,
-            end_commit_id
-        )?;
-    }
+    let file_contents: HashMap<String, String> = valid_files
+        .iter()
+        .filter_map(|file_path| {
+            let path_string = file_path.to_string_lossy().into_owned();
+            match process_file(
+                file_path,
+                summarize,
+                summarize_prompt_templates.clone(),
+                diff_only,
+                repo.as_ref(),
+                start_commit_id,
+                end_commit_id
+            ) {
+                Ok(content) => Some((path_string, content)),
+                Err(e) => {
+                    eprintln!("Error processing file {}: {}", file_path.display(), e);
+                    None
+                }
+            }
+        })
+        .collect();
 
-    // Convert the output buffer to a string
+    // Generate output string maintaining file path order
+    let result = if summarize {
+        let valid_file_strings: Vec<String> = valid_files.iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+            
+        let summaries = if !diff_only {
+            get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1.txt"].clone()).await?
+        } else {
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
+        };
+        
+        // Use the original valid_files order
+        valid_files.iter().zip(summaries.iter())
+            .map(|(file, summary)| {
+                format!("\nSummary of {}:\n\n{}\n", file.display(), summary)
+            })
+            .collect::<Vec<String>>()
+            .join("")
+    } else if diff_only {
+        valid_files.iter()
+            .filter_map(|file| {
+                let path_string = file.to_string_lossy().into_owned();
+                file_contents.get(&path_string)
+                    .map(|content| format!("\nDiff of {}:\n\n{}\n", file.display(), content))
+            })
+            .collect::<Vec<String>>()
+            .join("")
+    } else {
+        valid_files.iter()
+            .filter_map(|file| {
+                let path_string = file.to_string_lossy().into_owned();
+                file_contents.get(&path_string)
+                    .map(|content| format!("\nFile Content of {}:\n\n{}\n", file.display(), content))
+            })
+            .collect::<Vec<String>>()
+            .join("")
+    };
+
+    write!(output, "{}", result)?;
+    
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        .map_err(Into::into)
 }
 
 pub fn process_file(
     file_path: &PathBuf,
-    output_file: &mut impl Write,
+    _summarize: bool, // Fixed parameter order to match usage
+    _summarize_prompt_templates: HashMap<String, String>,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
-) -> io::Result<()> {
-    // Get the repository root path and normalize the relative path
-    let relative_path = if let Some(repo) = repo {
+) -> io::Result<String> {
+    let _relative_path = if let Some(repo) = repo {
         let repo_workdir = repo.workdir().ok_or_else(|| {
             io::Error::new(io::ErrorKind::Other, "Could not get repository working directory")
         })?;
@@ -849,55 +934,10 @@ pub fn process_file(
         file_path.clone()
     };
 
-    // Helper function to get blob content from a specific commit
-    let get_file_at_commit = |commit_id: &str| -> io::Result<String> {
-        let repo = repo.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Repository not available")
-        })?;
-        
-        let commit = repo.revparse_single(commit_id)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?
-            .peel_to_commit()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
-            
-        let tree = commit.tree()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
-            
-        // Convert the path to a string without leading ./ and replace Windows-style paths
-        let path_str = relative_path.to_string_lossy()
-            .replace('\\', "/");
-            
-        let entry = tree.get_path(Path::new(&path_str))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to get path '{}': {}", path_str, e.message())))?;
-            
-        let blob = entry.to_object(repo)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
-            
-        let blob = blob.as_blob()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Not a blob"))?;
-            
-        String::from_utf8(blob.content().to_vec())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    };
-
-    // Read file contents based on provided commit IDs
-    let contents = if let Some(end_id) = end_commit_id {
-        // If end_commit_id is provided, read from that commit
-        get_file_at_commit(end_id)?
-    } else {
-        // Otherwise read from current state
+    let contents = if !diff_only {
         fs::read_to_string(file_path)?
-    };
-    
-    // Write file path and contents
-    writeln!(output_file, "File: {}", file_path.display())?;
-    writeln!(output_file, "{}", contents)?;
-
-    if diff_only {
+    } else {
         if let Some(repo) = repo {
-            writeln!(output_file, "\nDiff:")?;
-            
-            // Helper function to get tree from commit ID
             let get_tree = |commit_id: &str| -> io::Result<Tree> {
                 repo.revparse_single(commit_id)
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?
@@ -936,14 +976,15 @@ pub fn process_file(
             }.map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
 
             let diff_str = get_diff_str(&diff)?;
-            let filtered_diff = filter_diff_for_file(&diff_str, file_path);
-            writeln!(output_file, "{}", filtered_diff)?;
+            filter_diff_for_file(&diff_str, file_path) // Removed unnecessary semicolon
+        } else {
+            String::new() // Added else branch for when repo is None
         }
-    }
-    
-    writeln!(output_file)?;
-    Ok(())
+    };
+
+    Ok(contents)
 }
+
 
 pub fn check_for_keywords(
     file_path: &PathBuf,
@@ -1035,7 +1076,9 @@ fn is_likely_text_file(path: &Path) -> bool {
     false
 }
 
-File: ./src/cli.rs
+
+File Content of ./src/cli.rs:
+
 use clap::Parser;
 
 #[derive(Parser)]
@@ -1055,6 +1098,14 @@ pub struct Cli {
     /// Include files that are ignored by default based on .gitignore rules
     #[arg(long, default_value_t = false)]
     pub dont_use_gitignore: bool,
+
+    /// Summarize file contents
+    #[arg(long, default_value_t = false)]
+    pub summarize: bool,
+
+    /// Apply summaries to code files
+    #[arg(long, default_value_t = false)]
+    pub apply: bool,
 
     /// Comma-separated list of paths to exclude
     #[arg(long)]
@@ -1087,6 +1138,123 @@ pub struct Cli {
     /// Ending commit hash for diff comparison
     #[arg(long)]
     pub end_commit_id: Option<String>,
+}
+
+
+File Content of ./src/summary.rs:
+
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
+use std::env;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+
+#[derive(Serialize)]
+struct DeepseekRequest {
+    model: String,
+    messages: Vec<Message>,
+    temperature: f32,
+}
+
+#[derive(Serialize)]
+struct Message {
+    role: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct DeepseekResponse {
+    choices: Vec<Choice>,
+}
+
+#[derive(Deserialize)]
+struct Choice {
+    message: ResponseMessage,
+}
+
+#[derive(Deserialize)]
+struct ResponseMessage {
+    content: String,
+}
+
+pub async fn get_summaries(valid_files: Vec<String>, file_contents: HashMap<String, String>, prompt_template: String) -> Result<Vec<String>> {
+    let semaphore = Arc::new(Semaphore::new(10));
+    
+    let mut handles = Vec::new();
+    
+    for file_path in valid_files {
+        let permit = semaphore.clone().acquire_owned().await?;
+        let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
+        let template = prompt_template.clone();
+        let file_path_clone = file_path.clone();
+        
+        let handle = tokio::spawn(async move {
+            let result = get_summary(content, template).await;
+            drop(permit);
+            match result {
+                Ok(summary) => summary,
+                Err(e) => format!("Error processing file {}: {}", file_path_clone, e)
+            }
+        });
+        
+        handles.push(handle);
+    }
+    
+    let mut results = Vec::new();
+    for handle in handles {
+        results.push(handle.await?);
+    }
+    
+    Ok(results)
+}
+
+pub async fn get_summary(text: String, prompt_template: String) -> Result<String> {
+    // Create API client
+    let client = Client::new();
+    
+    // Replace placeholder in template with actual text
+    let prompt = prompt_template.replace("{text}", &text);
+    
+    // Construct request payload
+    let request = DeepseekRequest {
+        model: "deepseek-chat".to_string(),
+        messages: vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }],
+        temperature: 0.7,
+    };
+    
+    // Send request to Deepseek API
+    let response = client
+        .post("https://api.deepseek.com/v1/chat/completions")
+        .header(
+            "Authorization",
+            format!("Bearer {}", env::var("DEEPSEEK_API_KEY").context("DEEPSEEK_API_KEY not set")?)
+        )
+        .json(&request)
+        .send()
+        .await
+        .context("Failed to send request to Deepseek API")?;
+    
+    // Parse response
+    let deepseek_response = response
+        .json::<DeepseekResponse>()
+        .await
+        .context("Failed to parse Deepseek API response")?;
+    
+    // Extract summary from response
+    let summary = deepseek_response
+        .choices
+        .first()
+        .context("No response choices available")?
+        .message
+        .content
+        .clone();
+    
+    Ok(summary)
 }
 
 

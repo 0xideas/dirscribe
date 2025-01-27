@@ -141,28 +141,27 @@ pub fn process_directory(
     writeln!(output)?;
 
 
-    let file_contents: Vec<_> = valid_files
-    .iter()
-    .map(|file_path| {
-        process_file(
-            file_path,
-            summarize,
-            summarize_prompt_templates,
-            diff_only,
-            repo.as_ref(),
-            start_commit_id,
-            end_commit_id
-        )
-    })
-    .collect();
-
-    assert_eq!(
-        valid_files.len(), 
-        file_contents.len(),
-        "Mismatch between valid_files ({}) and file_contents ({}) lengths",
-        valid_files.len(),
-        file_contents.len()
-    );
+    let file_contents: HashMap<String, String> = valid_files
+        .iter()
+        .filter_map(|file_path| {
+            let path_string = file_path.to_string_lossy().into_owned();
+            match process_file(
+                file_path,
+                summarize,
+                summarize_prompt_templates.clone(),
+                diff_only,
+                repo.as_ref(),
+                start_commit_id,
+                end_commit_id
+            ) {
+                Ok(content) => Some((path_string, content)),
+                Err(e) => {
+                    eprintln!("Error processing file {}: {}", file_path.display(), e);
+                    None
+                }
+            }
+        })
+        .collect();
 
     let result = if summarize {
         let valid_file_strings: Vec<String> = valid_files.iter()
@@ -170,7 +169,7 @@ pub fn process_directory(
             .collect();
             
         let summaries = if !diff_only {
-            get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-0.1.txt"].clone())
+            get_summaries(valid_file_strings.clone(), file_contents, summarize_prompt_templates["summary-0.1.txt"].clone())
         } else {
             get_summaries(valid_file_strings, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"].clone())
         };

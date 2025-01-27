@@ -203,8 +203,8 @@ pub async fn process_directory(
 
 pub fn process_file(
     file_path: &PathBuf,
-    _summarize: bool, // Fixed parameter order to match usage
-    _summarize_prompt_templates: HashMap<String, String>,
+    summarize: bool, // Fixed parameter order to match usage
+    summarize_prompt_templates: HashMap<String, String>,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,

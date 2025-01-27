@@ -158,6 +158,14 @@ pub fn process_directory(
         result.unwrap_or_else(|e| format!("Error processing file: {}", e))
     }).collect();
 
+    if summarize {
+        if !diff_only{
+            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-0.1.txt").unwrap()))
+        } else {
+            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-diff-0.1.txt").unwrap()))
+        }
+    }
+
     // Fixed incorrect parameter order and brace style
     let strings2: Vec<String> = if summarize {
         valid_files.iter().zip(strings).map(|(file, s)| 
@@ -249,15 +257,7 @@ pub fn process_file(
         }
     };
 
-    if summarize {
-        if !diff_only{
-            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-0.1.txt").unwrap()))
-        } else {
-            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-diff-0.1.txt").unwrap()))
-        }
-    } else if !diff_only {
-        Ok(contents)
-    } 
+    Ok(contents)
 }
 
 

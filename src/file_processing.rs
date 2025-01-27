@@ -139,8 +139,6 @@ pub async fn process_directory(
             let path_string = file_path.to_string_lossy().into_owned();
             match process_file(
                 file_path,
-                summarize,
-                summarize_prompt_templates.clone(),
                 diff_only,
                 repo.as_ref(),
                 start_commit_id,
@@ -160,11 +158,12 @@ pub async fn process_directory(
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
-            
+        
+
         let summaries = if !diff_only {
-            get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1.txt"].clone()).await?
+            get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone()).await?
         } else {
-            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
         };
         
         // Use the original valid_files order
@@ -203,8 +202,6 @@ pub async fn process_directory(
 
 pub fn process_file(
     file_path: &PathBuf,
-    summarize: bool, // Fixed parameter order to match usage
-    summarize_prompt_templates: HashMap<String, String>,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,

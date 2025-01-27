@@ -7,15 +7,15 @@ use tokio::sync::Semaphore;
 use std::sync::Arc;
 use rayon::prelude::*; // Added missing import for parallel iteration
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
-mod summary;
-use summary::get_summary;
+use crate::summary::get_summary;
+
 
 pub fn process_directory(
     dir_path: &str,
     suffixes: &[String],
     dont_use_gitignore: bool,
     summarize: bool,
-    summarize_prompt_template: &String,
+    summarize_prompt_templates: HashMap<String, String,
     apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
@@ -147,7 +147,7 @@ pub fn process_directory(
         let result = process_file(
             file_path,
             summarize,
-            summarize_prompt_template,
+            summarize_prompt_templates,
             diff_only,
             repo.as_ref(),
             start_commit_id,
@@ -180,7 +180,7 @@ pub fn process_directory(
 pub fn process_file(
     file_path: &PathBuf,
     summarize: bool, // Fixed parameter order to match usage
-    summarize_prompt_template: &String,
+    summarize_prompt_template: HashMap<String, String>    ,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
@@ -200,45 +200,8 @@ pub fn process_file(
         file_path.clone()
     };
 
-    let get_file_at_commit = |commit_id: &str| -> io::Result<String> {
-        let repo = repo.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "Repository not available")
-        })?;
-        
-        let commit = repo.revparse_single(commit_id)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?
-            .peel_to_commit()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
-            
-        let tree = commit.tree()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
-            
-        let path_str = relative_path.to_string_lossy()
-            .replace('\\', "/");
-            
-        let entry = tree.get_path(Path::new(&path_str))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to get path '{}': {}", path_str, e.message())))?;
-            
-        let blob = entry.to_object(repo)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
-            
-        let blob = blob.as_blob()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Not a blob"))?;
-            
-        String::from_utf8(blob.content().to_vec())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    };
-
-    let contents = if let Some(end_id) = end_commit_id {
-        get_file_at_commit(end_id)?
-    } else {
+    let contents = if !diff_only {
         fs::read_to_string(file_path)?
-    };
-
-    if summarize {
-        Ok(get_summary(&contents, &summarize_prompt_template)) // Fixed to pass contents by reference
-    } else if !diff_only {
-        Ok(contents)
     } else {
         if let Some(repo) = repo {
             let get_tree = |commit_id: &str| -> io::Result<Tree> {
@@ -279,11 +242,21 @@ pub fn process_file(
             }.map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
 
             let diff_str = get_diff_str(&diff)?;
-            Ok(filter_diff_for_file(&diff_str, file_path)) // Removed unnecessary semicolon
+            filter_diff_for_file(&diff_str, file_path) // Removed unnecessary semicolon
         } else {
-            Ok(String::new()) // Added else branch for when repo is None
+            String::new() // Added else branch for when repo is None
         }
     }
+
+    if summarize {
+        if !diff_only{
+            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-0.1.txt").unwrap()))
+        } else {
+            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-diff-0.1.txt").unwrap()))
+        }
+    } else if !diff_only {
+        Ok(contents)
+    } 
 }
 
 

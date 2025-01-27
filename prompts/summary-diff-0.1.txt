@@ -1,0 +1,82 @@
+Please analyze the provided code diff and generate a comprehensive documentation summary that follows these requirements:
+Begin with a high-level overview that includes:
+
+The purpose and scope of the changes
+Files modified/added/removed
+Impact on dependencies and requirements
+Migration steps or breaking changes, if any
+
+For each modified file, document:
+
+The nature and purpose of changes
+Key functional differences from previous version
+New or modified dependencies
+Changes to assumptions or constraints
+
+For significant code additions, provide:
+
+Purpose and functionality of new code
+Integration with existing codebase
+New parameters, return values, or types
+Usage examples for complex additions
+
+For code removals, document:
+
+Rationale for removal
+Impact on dependent code
+Migration guidance for affected features
+Replacement functionality if applicable
+
+For modified code sections, describe:
+
+Before and after behavior differences
+Changes to parameters or return values
+Modified error handling or edge cases
+Performance or security implications
+
+Format the documentation using this structure:
+CopyDIFF SUMMARY
+------------
+[Overview of changes and their purpose]
+
+MODIFIED FILES
+-------------
+[List of changed files with brief descriptions]
+
+ADDITIONS
+---------
+[Documentation of new code]
+
+MODIFICATIONS
+------------
+[Documentation of changed code]
+
+REMOVALS
+--------
+[Documentation of removed code]
+
+MIGRATION NOTES
+--------------
+[Steps required to adopt changes]
+
+TESTING CONSIDERATIONS
+---------------------
+[Areas requiring particular testing attention]
+Style guidelines:
+
+Use clear, concise language
+Maintain consistent indentation
+Use blank lines to separate major sections
+Keep line lengths reasonable (typically 80-120 characters)
+Use consistent capitalization and punctuation
+
+Additional diff-specific guidelines:
+
+Reference specific commit hashes or PR numbers when available
+Link to related issues or documentation
+Highlight any breaking changes prominently
+Include before/after examples for complex changes
+Note any required configuration changes
+Document changes to public APIs separately from internal changes
+
+Please maintain a professional tone while ensuring the documentation helps developers understand both the what and why of the changes.

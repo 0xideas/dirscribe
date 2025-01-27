@@ -1,8 +1,11 @@
+use std::fs;
 use std::fs::File;
 mod cli;
+mod io;
 mod git;
 mod file_processing;
 mod output;
+mod summary; 
 mod validation;
 use cli::Cli;
 use file_processing::process_directory;
@@ -10,7 +13,8 @@ use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
 use validation::validate_cli_args;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
+use io:load_prompts;
 
 
 
@@ -76,17 +80,15 @@ fn main() -> io::Result<()> {
         })
         .unwrap_or_default();
 
-
-    let file_path = Path::new("prompts/summary-0.1.txt");
     // Read the file contents into a String
-    let summarize_prompt_template = fs::read_to_string(file_path)?;
+    let summarize_prompt_templates = load_prompts("prompts")
     // Process directory and get the content string
     let content = process_directory(
         ".",
         &suffixes,
         cli.dont_use_gitignore,
         cli.summarize,
-        summarize_prompt_template,
+        summarize_prompt_templates,
         cli.apply,
         cli.diff_only,
         &exclude_paths,

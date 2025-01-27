@@ -112,14 +112,3 @@ pub async fn get_summary(text: String, prompt_template: String) -> Result<String
     Ok(summary)
 }
 
-// Example usage:
-#[tokio::main]
-async fn main() -> Result<()> {
-    let text = "Your text to summarize".to_string();
-    let template = std::fs::read_to_string("prompt_template.txt")?;
-    
-    let summary = get_summary(text, template).await?;
-    println!("Summary: {}", summary);
-    
-    Ok(())
-}

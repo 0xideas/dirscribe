@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
 use git2::{Repository, Tree};
-use rayon::prelude::*;
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
 use crate::summary::get_summaries;
 
@@ -16,7 +15,7 @@ pub async fn process_directory(
     dont_use_gitignore: bool,
     summarize: bool,
     summarize_prompt_templates: HashMap<String, String>,
-    apply: bool,
+    _apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -193,14 +192,14 @@ pub async fn process_directory(
 
 pub fn process_file(
     file_path: &PathBuf,
-    summarize: bool, // Fixed parameter order to match usage
-    summarize_prompt_templates: HashMap<String, String>    ,
+    _summarize: bool, // Fixed parameter order to match usage
+    _summarize_prompt_templates: HashMap<String, String>,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
 ) -> io::Result<String> {
-    let relative_path = if let Some(repo) = repo {
+    let _relative_path = if let Some(repo) = repo {
         let repo_workdir = repo.workdir().ok_or_else(|| {
             io::Error::new(io::ErrorKind::Other, "Could not get repository working directory")
         })?;

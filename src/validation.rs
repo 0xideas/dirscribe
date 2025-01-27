@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 use git2::Repository;
-use anyhow::{Result, Context, bail};
+use anyhow::Result;
 use std::error::Error;
 use std::fmt;
 

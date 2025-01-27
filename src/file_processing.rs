@@ -8,7 +8,7 @@ use tokio::sync::Semaphore;
 use std::sync::Arc;
 use rayon::prelude::*; // Added missing import for parallel iteration
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
-use crate::summary::get_summary;
+use crate::summary::get_summaries;
 
 
 pub fn process_directory(
@@ -140,45 +140,43 @@ pub fn process_directory(
     }
     writeln!(output)?;
 
-    // Process each file
-    let semaphore = Arc::new(Semaphore::new(5));
 
-    let strings: Vec<String> = valid_files.par_iter().map(|file_path| { // Fixed double par_iter() and collect type
-        let permit = semaphore.clone().try_acquire_owned().unwrap();
-        let result = process_file(
+    let file_contents: Vec<_> = valid_files
+    .iter()
+    .map(|file_path| {
+        process_file(
             file_path,
-            summarize,
-            summarize_prompt_templates,
+            &mut output,
             diff_only,
             repo.as_ref(),
             start_commit_id,
             end_commit_id
-        );
-        drop(permit);
-        result.unwrap_or_else(|e| format!("Error processing file: {}", e))
-    }).collect();
+        )
+    })
+    .collect();
+
+    assert_eq!(
+        valid_files.len(), 
+        file_contents.len(),
+        "Mismatch between valid_files ({}) and file_contents ({}) lengths",
+        valid_files.len(),
+        file_contents.len()
+    );
 
     if summarize {
-        if !diff_only{
-            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-0.1.txt").unwrap()))
-        } else {
-            Ok(get_summary(&contents, &summarize_prompt_templates.get("summary-diff-0.1.txt").unwrap()))
-        }
-    }
-
-    // Fixed incorrect parameter order and brace style
-    let strings2: Vec<String> = if summarize {
-        valid_files.iter().zip(strings).map(|(file, s)| 
+        let summaries = get_summaries(valid_files, file_contents)
+        let result = valid_files.iter().zip(summaries).map(|(file, s)| 
             format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect()
+    }
     } else if diff_only {
-        valid_files.iter().zip(strings).map(|(file, s)| 
+        let result = valid_files.iter().zip(strings).map(|(file, s)| 
             format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect()
     } else {
-        valid_files.iter().zip(strings).map(|(file, s)| 
+        let result = valid_files.iter().zip(strings).map(|(file, s)| 
             format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect()
     };
 
-    for string in strings2 {
+    for string in result {
         write!(output, "{}", string)?;
     }
     

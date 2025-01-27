@@ -31,6 +31,23 @@ struct ResponseMessage {
     content: String,
 }
 
+pub async fn get_summaries(valid_files: Vec<String>, file_contents: HashMap<String, String>, prompt_template: String) -> Result<Vec<String>> {
+    let semaphore = Arc::new(Semaphore::new(10)); // Assuming we want to keep the concurrency limit
+    
+    let results: Vec<String> = valid_files.par_iter().map(|file_path| {
+        let permit = semaphore.clone().try_acquire_owned().unwrap();
+        let content = file_contents.get(file_path).unwrap_or(&String::new()).clone();
+        let result = get_summary(content, prompt_template.clone());
+        drop(permit);
+        match result.await {
+            Ok(summary) => summary,
+            Err(e) => format!("Error processing file {}: {}", file_path, e)
+        }
+    }).collect();
+
+    Ok(results)
+}
+
 pub async fn get_summary(text: String, prompt_template: String) -> Result<String> {
     // Create API client
     let client = Client::new();

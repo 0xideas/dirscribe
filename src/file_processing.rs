@@ -170,11 +170,11 @@ pub async fn process_directory(
         valid_files.iter().zip(summaries.iter()).map(|(file, s)| 
             format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect();
     } else if diff_only {
-        valid_files.iter().zip(file_contents).map(|(file, s)| 
-            format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect();
+        valid_files.iter().zip(file_contents.values()).map(|(file, s)| 
+            format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect()
     } else {
-        valid_files.iter().zip(file_contents).map(|(file, s)| 
-            format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect();
+        valid_files.iter().zip(file_contents.values()).map(|(file, s)| 
+            format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect()
     };
 
     for string in result {

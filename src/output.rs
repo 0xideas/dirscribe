@@ -15,7 +15,7 @@ pub fn write_to_clipboard(content: &str) -> Result<()> {
 pub fn process_with_template(content: &str, template_path: &str) -> Result<String> {
     // Read the template file
     let template = fs::read_to_string(template_path)
-        .context("Failed to read template file")?;
+        .map_err(|e| anyhow::anyhow!("Failed to read template file: {}", e))?;
 
     // Check for the required placeholder
     if !template.contains("${${CONTENT}$}$") {

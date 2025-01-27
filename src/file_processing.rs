@@ -36,10 +36,7 @@ pub async fn process_directory(
     };
 
     if !dir_path.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Directory not found",
-        ));
+        return Err(anyhow::anyhow!("Directory not found"));
     }
 
     let mut diff_list = Vec::new();

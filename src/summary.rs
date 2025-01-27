@@ -1,6 +1,6 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use anyhow::{Context, Result, Error};
+use anyhow::{Context, Result};
 use std::env;
 use std::collections::HashMap;
 use std::sync::Arc;

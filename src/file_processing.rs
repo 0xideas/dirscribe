@@ -1,13 +1,11 @@
 use std::fs;
 use std::io::{self, Write, Cursor};
-use anyhow::{Context, Result};
+use anyhow::Context;
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
 use git2::{Repository, Tree};
-use tokio::sync::Semaphore;
-use std::sync::Arc;
-use rayon::prelude::*; // Added missing import for parallel iteration
+use rayon::prelude::*;
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
 use crate::summary::get_summaries;
 

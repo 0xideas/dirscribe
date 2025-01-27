@@ -81,6 +81,8 @@ fn main() -> io::Result<()> {
         ".",
         &suffixes,
         cli.dont_use_gitignore,
+        cli.summarize,
+        cli.apply,
         cli.diff_only,
         &exclude_paths,
         &include_paths,

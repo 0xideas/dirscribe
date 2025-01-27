@@ -3,12 +3,18 @@ use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use git2::{Repository, Tree};
+use tokio::sync::Semaphore;
+use std::sync::Arc;
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
+mod summary;
+use summary::get_summary;
 
 pub fn process_directory(
     dir_path: &str,
     suffixes: &[String],
     dont_use_gitignore: bool,
+    summarize: bool,
+    apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -129,21 +135,46 @@ pub fn process_directory(
         writeln!(output, "{}", file_path.display())?;
     }
     writeln!(output)?;
-    writeln!(output, "File Contents:")?;
+    if !summarize {
+        writeln!(output, "File Contents:")?;
+    } else {
+        writeln!(output, "File Summaries:")?;
+    }
     writeln!(output)?;
 
     // Process each file
-    for file_path in valid_files {
-        process_file(
-            &file_path,
-            &mut output,
+    let semaphore = Arc::new(Semaphore::new(5));
+
+    let strings = valid_files.par_iter().par_iter().map(|file_path| {
+        let permit = semaphore.clone().try_acquire_owned().unwrap();
+        let result = process_file(
+            file_path,
+            summarize,
             diff_only,
             repo.as_ref(),
             start_commit_id,
             end_commit_id
-        )?;
+        );
+        // Permit is automatically released when dropped
+        drop(permit);
+        result
+    }).collect()?;
+
+    let strings2 = if (summarize) {
+        valid_files.iter().zip(strings).map(|(file, s)| 
+            format!("\nSummary of {}:\n\n{}\n", file, s))
+    } else if (!diff_only) {
+        valid_files.iter().zip(strings).map(|(file, s)| 
+            format!("\nFile Content of {}:\n\n{}\n", file, s))
+    } else {
+        valid_files.iter().zip(strings).map(|(file, s)| 
+            format!("\nDiff of {}:\n\n{}\n", file, s))
     }
 
+    for string in strings2 {
+        write!(output, "{}", string)?;
+    }
+    
     // Convert the output buffer to a string
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
@@ -151,12 +182,12 @@ pub fn process_directory(
 
 pub fn process_file(
     file_path: &PathBuf,
-    output_file: &mut impl Write,
     diff_only: bool,
+    summarize: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
     end_commit_id: Option<&str>
-) -> io::Result<()> {
+) -> io::Result<String> {
     // Get the repository root path and normalize the relative path
     let relative_path = if let Some(repo) = repo {
         let repo_workdir = repo.workdir().ok_or_else(|| {
@@ -212,13 +243,15 @@ pub fn process_file(
         fs::read_to_string(file_path)?
     };
     
-    // Write file path and contents
-    writeln!(output_file, "File: {}", file_path.display())?;
-    writeln!(output_file, "{}", contents)?;
 
-    if diff_only {
+
+    if {summarize}{
+        let summary = get_summary(contents);
+        Ok(summary)
+    } else if !diff_only {
+        Ok(contents)
+    } else {
         if let Some(repo) = repo {
-            writeln!(output_file, "\nDiff:")?;
             
             // Helper function to get tree from commit ID
             let get_tree = |commit_id: &str| -> io::Result<Tree> {
@@ -260,12 +293,9 @@ pub fn process_file(
 
             let diff_str = get_diff_str(&diff)?;
             let filtered_diff = filter_diff_for_file(&diff_str, file_path);
-            writeln!(output_file, "{}", filtered_diff)?;
+            Ok(filtered_diff);
         }
     }
-    
-    writeln!(output_file)?;
-    Ok(())
 }
 
 pub fn check_for_keywords(

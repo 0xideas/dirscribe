@@ -1,6 +1,6 @@
 [package]
 name = "dirscribe"
-version = "1.0.4"
+version = "1.1.0"
 edition = "2021"
 authors = ["Leon Luithlen"]
 description = "A CLI tool that combines contents of files with specific extensions from a directory"

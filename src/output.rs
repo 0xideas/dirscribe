@@ -1,13 +1,13 @@
 use std::fs;
-use anyhow::{Result, Context, bail};
+use anyhow::{Result, bail};
 use clipboard::{ClipboardContext, ClipboardProvider};
 
 pub fn write_to_clipboard(content: &str) -> Result<()> {
     let mut ctx: ClipboardContext = ClipboardProvider::new()
-        .context("Failed to create clipboard context")?;
+        .map_err(|e| anyhow::anyhow!("Failed to create clipboard context: {}", e))?;
     
     ctx.set_contents(content.to_owned())
-        .context("Failed to set clipboard contents")?;
+        .map_err(|e| anyhow::anyhow!("Failed to set clipboard contents: {}", e))?;
     
     Ok(())
 }

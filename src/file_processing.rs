@@ -146,7 +146,8 @@ pub fn process_directory(
     .map(|file_path| {
         process_file(
             file_path,
-            &mut output,
+            summarize,
+            summarize_prompt_templates,
             diff_only,
             repo.as_ref(),
             start_commit_id,
@@ -164,7 +165,11 @@ pub fn process_directory(
     );
 
     let result = if summarize {
-        let summaries = get_summaries(valid_files, file_contents);
+        let summaries = if !diff_only {
+            get_summaries(valid_files, file_contents, summarize_prompt_templates["summary-0.1.txt"]);
+        } else {
+            get_summaries(valid_files, file_contents, summarize_prompt_templates["summary-diff-0.1.txt"]);
+        };
         valid_files.iter().zip(summaries).map(|(file, s)| 
             format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect();
     } else if diff_only {

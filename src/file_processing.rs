@@ -163,17 +163,16 @@ pub fn process_directory(
         file_contents.len()
     );
 
-    if summarize {
-        let summaries = get_summaries(valid_files, file_contents)
-        let result = valid_files.iter().zip(summaries).map(|(file, s)| 
-            format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect()
-    }
+    let result = if summarize {
+        let summaries = get_summaries(valid_files, file_contents);
+        valid_files.iter().zip(summaries).map(|(file, s)| 
+            format!("\nSummary of {}:\n\n{}\n", file.display(), s)).collect();
     } else if diff_only {
-        let result = valid_files.iter().zip(strings).map(|(file, s)| 
-            format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect()
+        valid_files.iter().zip(file_contents).map(|(file, s)| 
+            format!("\nDiff of {}:\n\n{}\n", file.display(), s)).collect();
     } else {
-        let result = valid_files.iter().zip(strings).map(|(file, s)| 
-            format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect()
+        valid_files.iter().zip(file_contents).map(|(file, s)| 
+            format!("\nFile Content of {}:\n\n{}\n", file.display(), s)).collect();
     };
 
     for string in result {
@@ -182,6 +181,7 @@ pub fn process_directory(
     
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+
 }
 
 pub fn process_file(

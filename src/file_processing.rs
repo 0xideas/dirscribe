@@ -2,13 +2,13 @@
 [DIRSCRIBE]
 This Rust code provides functionality for processing directories and files, including generating summaries, applying diffs, and filtering files based on keywords and paths. It also includes utility functions for working with Git repositories and checking for text files.
 
-Defined: process_directory,write_summary_to_file,process_file,check_for_keywords,is_likely_text_file,check_summary,check_prefix,remove_dirscribe_sections,get_diff_list,get_diff_str,filter_diff_for_file,get_summaries
+Defined: process_directory,write_summary_to_file,process_file,check_for_keywords,is_likely_text_file,check_summary,check_prefix,filter_dirscribe_sections,get_diff_list,get_diff_str,filter_diff_for_file,get_summaries
 Used: std::fs,std::io,anyhow,std::path,ignore::WalkBuilder,std::collections::HashMap,git2::Repository,git2::Tree,crate::git,crate::summary
 [/DIRSCRIBE]
 */
 use std::fs;
 use std::io::{self, Write, Cursor};
-use anyhow::Context;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
@@ -24,6 +24,7 @@ pub async fn process_directory(
     summarize: bool,
     summarize_prompt_templates: HashMap<String, String>,
     apply: bool,
+    retrieve: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -169,7 +170,11 @@ pub async fn process_directory(
         
 
         let summaries = if !diff_only {
-            get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone()).await?
+            if !retrieve {
+                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone()).await?
+            } else {
+                get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
+            }
         } else {
             get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
         };
@@ -232,8 +237,22 @@ fn check_prefix(s: &str) -> bool {
     lines.iter().all(|l| l.trim_start().starts_with(if is_hash { "#" } else { "//" }))
 }
 
+fn get_summaries_from_files(
+    valid_files: Vec<String>, 
+    file_contents: HashMap<String, String>
+) -> Vec<String> {
+    let mut summaries = Vec::new();
 
-fn remove_dirscribe_sections(content: &str) -> String {
+    for file_path in valid_files {
+        let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
+        
+        let summary =  filter_dirscribe_sections(&content, false);
+        summaries.push(summary)
+    }
+
+    summaries
+}
+fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
         return String::new();
@@ -255,18 +274,30 @@ fn remove_dirscribe_sections(content: &str) -> String {
             if let Some(next_line) = next {
                 if line_number < 3 && next_line.contains("[DIRSCRIBE]") {
                     in_dirscribe = true;
-                    return false;
+                    if exclude {
+                        return false;
+                    } else {
+                        return true
+                    }
                 }
             }
 
             if let Some(prev_line) = prev {
                 if in_dirscribe && prev_line.contains("[/DIRSCRIBE]"){
                     in_dirscribe = false;
-                    return false;
+                    if exclude {
+                        return false;
+                    } else {
+                        return true
+                    }
                 }
             }
 
-            !in_dirscribe
+            if exclude {
+                !in_dirscribe
+            } else {
+                in_dirscribe
+            }
         })
         .map(|(_, current, _)| current)
         .collect();
@@ -278,7 +309,7 @@ pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<
     if check_summary(summary) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;    
         println!("content: {}", content); 
-        let processed_content = remove_dirscribe_sections(&content);
+        let processed_content = filter_dirscribe_sections(&content, true);
         println!("processed_content: {}", processed_content); 
         let summary_block = format!("{}\n", summary);
         println!("summary_block: {}", summary_block); 

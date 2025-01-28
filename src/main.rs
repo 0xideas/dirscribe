@@ -98,6 +98,7 @@ async fn main() -> Result<()> {
         cli.summarize,
         summarize_prompt_templates,
         cli.apply,
+        cli.retrieve,
         cli.diff_only,
         &exclude_paths,
         &include_paths,

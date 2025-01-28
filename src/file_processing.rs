@@ -224,15 +224,15 @@ fn check_prefix(s: &str) -> bool {
     lines.iter().all(|l| l.trim_start().starts_with(if is_hash { "#" } else { "//" }))
 }
 
-pub fn write_summary_to_file(file_path: &Path, summary: &str) -> io::Result<()> {
-    if (check_summary(summary) | check_prefix(summary)) {
+pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<()> {
+    if check_summary(summary) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;        
         let summary_block = format!("{}\n", summary);
         let new_content = summary_block + &content;
         fs::write(file_path, new_content)?;
         Ok(())
     } else {
-        Err("Summary is not a correctly formatted comment. (doesn't start with a comment char on every line or doesn't have starting or ending line with multi line comment enclosure)")
+        return Err(anyhow::anyhow!("Summary is not a correctly formatted comment. (doesn't start with a comment char on every line or doesn't have starting or ending line with multi line comment enclosure)"));
 
     }
 }

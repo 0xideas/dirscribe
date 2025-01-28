@@ -182,7 +182,10 @@ impl UnifiedClient {
                 
                 #[derive(Debug, Deserialize)]
                 struct AnthropicContent {
-                    message: Message,
+                    #[serde(rename = "type")]
+                    content_type: String,
+                    #[serde(rename = "text")]
+                    message: String,
                 }
                 
                 #[derive(Debug, Deserialize)]
@@ -193,7 +196,7 @@ impl UnifiedClient {
 
                 let response: AnthropicResponse = serde_json::from_str(&response_text)?;
                 Ok(UnifiedResponse {
-                    content: response.content[0].message.content.clone(),
+                    content: response.content[0].message.clone(),
                     total_tokens: response.usage.input_tokens + response.usage.output_tokens,
                 })
             }

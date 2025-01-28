@@ -1,3 +1,12 @@
+/*
+[DIRSCRIBE]
+This Rust code provides a unified client for interacting with different language model providers (Deepseek, Anthropic, and Ollama) and generating summaries for files using the Anthropic provider. It defines common data structures, handles API requests and responses, and manages concurrent requests using a semaphore.
+
+Defined: Provider,Message,ProviderRequest,DeepseekRequest,AnthropicRequest,OllamaRequest,UnifiedResponse,UnifiedClient,MAX_CONCURRENT_REQUESTS,ANTHROPIC_MAX_TOKENS,ANTHROPIC_TEMPERATURE,MAX_RETRIES,INITIAL_BACKOFF_MS,build_headers,build_request,parse_response,chat,get_summaries
+
+Used: reqwest,serde,tokio,anyhow,std::env,std::collections::HashMap,tokio::sync::Semaphore,std::sync::Arc
+[/DIRSCRIBE]
+*/
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
@@ -304,7 +313,7 @@ pub async fn get_summaries(
     file_contents: HashMap<String, String>, 
     prompt_template: String
 ) -> Result<Vec<String>> {
-    let provider = Provider::Ollama;
+    let provider = Provider::Anthropic;
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     

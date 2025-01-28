@@ -229,7 +229,7 @@ fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (
         }
         let comment_start = lines[0].trim() == *multi_line_comment_start;
         let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
-        let dirscribe_end = lines[lines.len() - 2].trim() == "[DIRSCRIBE]";
+        let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
         let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
 
         comment_start && dirscribe_start && dirscribe_end && comment_end

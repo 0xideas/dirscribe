@@ -187,8 +187,6 @@ pub async fn process_directory(
                 }
             }
             
-            // Add a message to the output indicating files were modified
-            write!(output, "\nSummaries have been written to the top of {} files.\n", valid_files.len())?;
         }
     
         // Use the original valid_files order

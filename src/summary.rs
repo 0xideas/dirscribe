@@ -18,6 +18,7 @@ const INITIAL_BACKOFF_MS: u64 = 1000;
 pub enum Provider {
     Deepseek,
     Anthropic,
+    Ollama,
 }
 
 // Common message structure used across providers
@@ -49,6 +50,15 @@ struct AnthropicRequest {
     max_tokens: Option<i32>,
     temperature: Option<f32>,
 }
+
+#[derive(Debug, Serialize)]
+struct OllamaRequest {
+    model: String,
+    prompt: String,
+    stream: bool,
+}
+
+
 
 // Unified response structure
 #[derive(Debug)]
@@ -88,6 +98,13 @@ impl UnifiedClient {
                     "claude-3-sonnet-20240229".to_string(),
                 )
             }
+            Provider::Ollama => {
+                (
+                    String::new(), // No API key needed for local Ollama
+                    "http://localhost:11434/api/generate".to_string(),
+                    "deepseek-r1:8b".to_string(), // Default model, can be made configurable
+                )
+            }
         };
 
         Ok(Self {
@@ -119,6 +136,7 @@ impl UnifiedClient {
                     "2023-06-01".parse().unwrap(),
                 );
             }
+            Provider::Ollama => {}
         }
         
         headers.insert(
@@ -146,6 +164,19 @@ impl UnifiedClient {
                     "messages": messages,
                     "max_tokens": ANTHROPIC_MAX_TOKENS,
                     "temperature": ANTHROPIC_TEMPERATURE
+                })
+            }
+            Provider::Ollama => {
+                // For Ollama, we'll concatenate all messages into a single prompt
+                let prompt = messages.iter()
+                    .map(|m| format!("{}: {}", m.role, m.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                
+                serde_json::json!({
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": false
                 })
             }
         }
@@ -203,6 +234,29 @@ impl UnifiedClient {
                     total_tokens: response.usage.input_tokens + response.usage.output_tokens,
                 })
             }
+            Provider::Ollama => {
+                #[derive(Debug, Deserialize)]
+                struct OllamaResponse {
+                    response: String,
+                    done: bool,
+                }
+                let response: OllamaResponse = serde_json::from_str(&response_text)?;
+                let content = if response.response.contains("</think>") {
+                    response.response
+                        .split("</think>")
+                        .nth(1)
+                        .unwrap_or(&response.response)
+                        .trim()
+                        .to_string()
+                } else {
+                    response.response.clone()
+                };
+                
+                Ok(UnifiedResponse {
+                    content,
+                    total_tokens: 0, // Ollama doesn't provide token counts
+                })
+            }
         }
     }
 
@@ -250,7 +304,7 @@ pub async fn get_summaries(
     file_contents: HashMap<String, String>, 
     prompt_template: String
 ) -> Result<Vec<String>> {
-    let provider = Provider::Anthropic;
+    let provider = Provider::Ollama;
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     

@@ -166,7 +166,7 @@ pub async fn process_directory(
             get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
         };
         
-        if summarize && apply && !diff_only {
+        if apply && !diff_only {
             // Zip together the files and their summaries
             for (file_path, summary) in valid_files.iter().zip(summaries.iter()) {
                 if let Err(e) = write_summary_to_file(file_path, summary) {
@@ -212,20 +212,29 @@ pub async fn process_directory(
         .map_err(Into::into)
 }
 
+fn check_summary(s: &str) -> bool {
+    s.split('\n').nth(0).map_or(true, |f| f.len() <= 4) && s.split('\n').last().map_or(true, |l| l.len() <= 4)
+}
+
+fn check_prefix(s: &str) -> bool {
+    let lines: Vec<_> = s.split('\n').collect();
+    if lines.is_empty() { return true; }
+    let first = lines[0].trim_start();
+    let is_hash = first.starts_with('#');
+    lines.iter().all(|l| l.trim_start().starts_with(if is_hash { "#" } else { "//" }))
+}
+
 pub fn write_summary_to_file(file_path: &Path, summary: &str) -> io::Result<()> {
-    // Read the existing content
-    let content = fs::read_to_string(file_path)?;
-    
-    // Create the summary comment block
-    let summary_block = format!("{}\n", summary);
-    
-    // Combine summary with original content
-    let new_content = summary_block + &content;
-    
-    // Write back to file
-    fs::write(file_path, new_content)?;
-    
-    Ok(())
+    if (check_summary(summary) | check_prefix(summary)) {
+        let content = fs::read_to_string(file_path)?;        
+        let summary_block = format!("{}\n", summary);
+        let new_content = summary_block + &content;
+        fs::write(file_path, new_content)?;
+        Ok(())
+    } else {
+        Err("Summary is not a correctly formatted comment. (doesn't start with a comment char on every line or doesn't have starting or ending line with multi line comment enclosure)")
+
+    }
 }
 
 pub fn process_file(

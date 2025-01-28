@@ -1,10 +1,3 @@
-/*
-[DIRSCRIBE]
-Validates CLI arguments, paths, git-related arguments, keywords, and path filters. Defines custom ValidationError struct.
-Defined: ValidationError,validate_cli_args,validate_suffixes,validate_template_path,validate_output_path,validate_git_args,validate_commit,validate_keywords,validate_path_filters
-Used: std::path::{Path,PathBuf},crate::cli::Cli,git2::Repository,anyhow::Result,std::error::Error,std::fmt
-[/DIRSCRIBE]
-*/
 use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 use git2::Repository;

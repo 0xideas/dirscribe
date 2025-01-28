@@ -1,10 +1,3 @@
-/*
-[DIRSCRIBE]
-This Rust code provides functionality for processing directories and files, including generating summaries or diffs, applying summaries to files, and filtering files based on various criteria.
-Defined: process_directory,check_summary,check_prefix,get_summaries_from_files,filter_dirscribe_sections,write_summary_to_file,process_file,check_for_keywords,is_likely_text_file,create_comment_map
-Used: std::fs,std::io,anyhow,std::path,ignore::WalkBuilder,std::collections::HashMap,git2,crate::git,crate::summary
-[/DIRSCRIBE]
-*/
 use std::fs;
 use std::io::{self, Write, Cursor};
 use anyhow::{Context, Result};
@@ -230,12 +223,16 @@ fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (
         .and_then(|ext| ext.to_str())
         .unwrap_or(""); 
     if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
-        s.split('\n')
-            .nth(0)
-            .map_or(true, |f| f.trim() == *multi_line_comment_start && 
-                s.split('\n')
-                    .last()
-                    .map_or(true, |l| l.trim() == *multi_line_comment_end))
+        let lines: Vec<&str> = s.split('\n').collect();
+        if lines.len() < 4 {
+            return false;
+        }
+        let comment_start = lines[0].trim() == *multi_line_comment_start;
+        let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
+        let dirscribe_end = lines[lines.len() - 2].trim() == "[DIRSCRIBE]";
+        let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+
+        comment_start && dirscribe_start && dirscribe_end && comment_end
     } else {
         false
     }

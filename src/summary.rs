@@ -1,3 +1,11 @@
+/*
+[DIRSCRIBE]
+This Rust code provides a unified client for interacting with different language model providers (Deepseek, Anthropic, and Ollama). It handles API requests, response parsing, and retries for failed requests. The main functionality is to send chat messages to the providers and receive responses.
+
+Defined: Provider,Message,ProviderRequest,DeepseekRequest,AnthropicRequest,OllamaRequest,UnifiedResponse,UnifiedClient,MAX_CONCURRENT_REQUESTS,ANTHROPIC_MAX_TOKENS,ANTHROPIC_TEMPERATURE,MAX_RETRIES,INITIAL_BACKOFF_MS,new,build_headers,build_request,parse_response,chat,get_summaries
+Used: reqwest,serde,tokio,anyhow,std,std,std,tokio,std,anyhow
+[/DIRSCRIBE]
+*/
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};

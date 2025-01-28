@@ -1,3 +1,10 @@
+/*
+[DIRSCRIBE]
+Loads prompt files from a directory into a HashMap, mapping file names to file contents.
+Defined: load_prompts
+Used: std::collections::HashMap,std::fs
+[/DIRSCRIBE]
+*/
 use std::collections::HashMap;
 use std::fs;
 

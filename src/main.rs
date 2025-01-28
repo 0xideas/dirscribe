@@ -1,3 +1,10 @@
+/*
+[DIRSCRIBE]
+Summarizes code files in a directory based on specified filters and prompts, and outputs the summary to a file or clipboard.
+Defined: std::fs::File,cli,git,file_processing,output,prompt_handling,summary,validation,Cli,process_directory,write_to_clipboard,process_with_template,Parser,validate_cli_args,Result,Context,Write,PathBuf,load_prompts
+Used: std::fs::File,cli::Cli,file_processing::process_directory,output::write_to_clipboard,output::process_with_template,clap::Parser,validation::validate_cli_args,anyhow::Result,anyhow::Context,std::io::Write,std::path::PathBuf,prompt_handling::load_prompts
+[/DIRSCRIBE]
+*/
 use std::fs::File;
 mod cli;
 mod git;
@@ -119,7 +126,6 @@ async fn main() -> Result<()> {
     };
     Ok(())
 }
-
 
 
 

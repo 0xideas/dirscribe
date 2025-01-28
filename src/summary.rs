@@ -9,7 +9,7 @@ use std::sync::Arc;
 use anyhow::Context;
 
 const MAX_CONCURRENT_REQUESTS: usize = 1;
-const ANTHROPIC_MAX_TOKENS: i32 = 300;
+const ANTHROPIC_MAX_TOKENS: i32 = 512;
 const ANTHROPIC_TEMPERATURE: f32 = 0.1;
 const MAX_RETRIES: u32 = 6;
 const INITIAL_BACKOFF_MS: u64 = 1000;

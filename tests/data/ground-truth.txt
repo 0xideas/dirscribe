@@ -135,7 +135,6 @@ pub fn load_prompts(dir: &str) -> std::io::Result<HashMap<String, String>> {
         .collect())
 }
 
-
 File Content of ./src/git.rs:
 
 use std::io;
@@ -262,7 +261,6 @@ pub fn filter_diff_for_file(diff_str: &str, file_path: &Path) -> String {
     result.join("\n")
 }
 
-
 File Content of ./src/validation.rs:
 
 use std::path::{Path, PathBuf};
@@ -325,6 +323,18 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         &cli.exclude_paths,
         &cli.include_paths,
     )?;
+
+    if cli.apply && !cli.summarize {
+        return Err(ValidationError("--apply can only be used with --summarize".into()).into());
+    }
+
+    if cli.apply && cli.diff_only {
+        return Err(ValidationError("--apply cannot be used with --diff-only".into()).into());
+    }
+
+    if cli.apply && cli.retrieve {
+        return Err(ValidationError("--apply and --retrieve cannot be used together".into()).into());
+    }
 
     Ok(())
 }
@@ -542,7 +552,6 @@ fn validate_path_filters(
     Ok(())
 }
 
-
 File Content of ./src/output.rs:
 
 use std::fs;
@@ -572,7 +581,6 @@ pub fn process_with_template(content: &str, template_path: &str) -> Result<Strin
     // Replace the placeholder with the content
     Ok(template.replace("${${CONTENT}$}$", content))
 }
-
 
 File Content of ./src/main.rs:
 
@@ -669,6 +677,7 @@ async fn main() -> Result<()> {
         cli.summarize,
         summarize_prompt_templates,
         cli.apply,
+        cli.retrieve,
         cli.diff_only,
         &exclude_paths,
         &include_paths,
@@ -705,12 +714,11 @@ async fn main() -> Result<()> {
 
 
 
-
 File Content of ./src/file_processing.rs:
 
 use std::fs;
 use std::io::{self, Write, Cursor};
-use anyhow::Context;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use std::collections::HashMap;
@@ -725,7 +733,8 @@ pub async fn process_directory(
     dont_use_gitignore: bool,
     summarize: bool,
     summarize_prompt_templates: HashMap<String, String>,
-    _apply: bool,
+    apply: bool,
+    retrieve: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -849,8 +858,6 @@ pub async fn process_directory(
             let path_string = file_path.to_string_lossy().into_owned();
             match process_file(
                 file_path,
-                summarize,
-                summarize_prompt_templates.clone(),
                 diff_only,
                 repo.as_ref(),
                 start_commit_id,
@@ -870,13 +877,30 @@ pub async fn process_directory(
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
-            
+        
+
         let summaries = if !diff_only {
-            get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1.txt"].clone()).await?
+            if !retrieve {
+                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone()).await?
+            } else {
+                get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
+            }
         } else {
-            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1.txt"].clone()).await?
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
         };
         
+        if apply && !diff_only {
+            // Zip together the files and their summaries
+            for (file_path, summary) in valid_files.iter().zip(summaries.iter()) {
+                if let Err(e) = write_summary_to_file(file_path, summary) {
+                    eprintln!("Error writing summary to {}: {}", file_path.display(), e);
+                }
+            }
+            
+            // Add a message to the output indicating files were modified
+            write!(output, "\nSummaries have been written to the top of {} files.\n", valid_files.len())?;
+        }
+    
         // Use the original valid_files order
         valid_files.iter().zip(summaries.iter())
             .map(|(file, summary)| {
@@ -911,10 +935,106 @@ pub async fn process_directory(
         .map_err(Into::into)
 }
 
+fn check_summary(s: &str) -> bool {
+    s.split('\n').nth(0).map_or(true, |f| f.len() <= 4) && s.split('\n').last().map_or(true, |l| l.len() <= 4)
+}
+
+fn check_prefix(s: &str) -> bool {
+    let lines: Vec<_> = s.split('\n').collect();
+    if lines.is_empty() { return true; }
+    let first = lines[0].trim_start();
+    let is_hash = first.starts_with('#');
+    lines.iter().all(|l| l.trim_start().starts_with(if is_hash { "#" } else { "//" }))
+}
+
+fn get_summaries_from_files(
+    valid_files: Vec<String>, 
+    file_contents: HashMap<String, String>
+) -> Vec<String> {
+    let mut summaries = Vec::new();
+
+    for file_path in valid_files {
+        let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
+        
+        let summary =  filter_dirscribe_sections(&content, false);
+        summaries.push(summary)
+    }
+
+    summaries
+}
+fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    // Create iterator tuples with (previous, current, next) lines
+    let with_context = (0..lines.len()).map(|i| {
+        let prev = if i > 0 { Some(lines[i - 1]) } else { None };
+        let current = lines[i];
+        let next = if i < lines.len() - 1 { Some(lines[i + 1]) } else { None };
+        (prev, current, next)
+    });
+    let mut line_number = 0;
+    let mut in_dirscribe = false;
+    let filtered_lines: Vec<&str> = with_context
+        .filter(|(prev, current, next)| {
+            line_number += 1;
+
+            if let Some(next_line) = next {
+                if line_number < 3 && next_line.contains("[DIRSCRIBE]") {
+                    in_dirscribe = true;
+                    if exclude {
+                        return false;
+                    } else {
+                        return true
+                    }
+                }
+            }
+
+            if let Some(prev_line) = prev {
+                if in_dirscribe && prev_line.contains("[/DIRSCRIBE]"){
+                    in_dirscribe = false;
+                    if exclude {
+                        return false;
+                    } else {
+                        return true
+                    }
+                }
+            }
+
+            if exclude {
+                !in_dirscribe
+            } else {
+                in_dirscribe
+            }
+        })
+        .map(|(_, current, _)| current)
+        .collect();
+
+    filtered_lines.join("\n")
+}
+
+pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<()> {
+    if check_summary(summary) | check_prefix(summary) {
+        let content = fs::read_to_string(file_path)?;    
+        println!("content: {}", content); 
+        let processed_content = filter_dirscribe_sections(&content, true);
+        println!("processed_content: {}", processed_content); 
+        let summary_block = format!("{}\n", summary);
+        println!("summary_block: {}", summary_block); 
+        let new_content = summary_block + &processed_content;
+        fs::write(file_path, new_content)?;
+        Ok(())
+    } else {
+        return Err(anyhow::anyhow!("Summary is not a correctly formatted comment. (doesn't start with a comment char on every line or doesn't have starting or ending line with multi line comment enclosure)"));
+
+    }
+}
+
+
 pub fn process_file(
     file_path: &PathBuf,
-    _summarize: bool, // Fixed parameter order to match usage
-    _summarize_prompt_templates: HashMap<String, String>,
     diff_only: bool,
     repo: Option<&Repository>,
     start_commit_id: Option<&str>,
@@ -1076,7 +1196,6 @@ fn is_likely_text_file(path: &Path) -> bool {
     false
 }
 
-
 File Content of ./src/cli.rs:
 
 use clap::Parser;
@@ -1106,6 +1225,10 @@ pub struct Cli {
     /// Apply summaries to code files
     #[arg(long, default_value_t = false)]
     pub apply: bool,
+
+    /// Retrieve summaries from code files
+    #[arg(long, default_value_t = false)]
+    pub retrieve: bool,
 
     /// Comma-separated list of paths to exclude
     #[arg(long)]
@@ -1140,62 +1263,285 @@ pub struct Cli {
     pub end_commit_id: Option<String>,
 }
 
-
 File Content of ./src/summary.rs:
 
-use reqwest::Client;
+use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
-use anyhow::{Context, Result};
+use tokio::time::{sleep, Duration};
+use anyhow::Result;
 use std::env;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
+use std::sync::Arc;
+use anyhow::Context;
 
-#[derive(Serialize)]
+const MAX_CONCURRENT_REQUESTS: usize = 1;
+const ANTHROPIC_MAX_TOKENS: i32 = 300;
+const ANTHROPIC_TEMPERATURE: f32 = 0.1;
+const MAX_RETRIES: u32 = 6;
+const INITIAL_BACKOFF_MS: u64 = 1000;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Provider {
+    Deepseek,
+    Anthropic,
+}
+
+// Common message structure used across providers
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Message {
+    pub role: String,
+    pub content: String,
+}
+
+// Trait for provider-specific request structures
+trait ProviderRequest {
+    fn build_request(&self, messages: Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> serde_json::Value;
+}
+
+// Provider-specific request structures
+#[derive(Debug, Serialize)]
 struct DeepseekRequest {
     model: String,
     messages: Vec<Message>,
-    temperature: f32,
+    temperature: Option<f32>,
+    max_tokens: Option<i32>,
+    stream: Option<bool>,
 }
 
-#[derive(Serialize)]
-struct Message {
-    role: String,
-    content: String,
+#[derive(Debug, Serialize)]
+struct AnthropicRequest {
+    model: String,
+    messages: Vec<Message>,
+    max_tokens: Option<i32>,
+    temperature: Option<f32>,
 }
 
-#[derive(Deserialize)]
-struct DeepseekResponse {
-    choices: Vec<Choice>,
+// Unified response structure
+#[derive(Debug)]
+pub struct UnifiedResponse {
+    pub content: String,
+    pub total_tokens: i32,
 }
 
-#[derive(Deserialize)]
-struct Choice {
-    message: ResponseMessage,
+pub struct UnifiedClient {
+    client: Client,
+    provider: Provider,
+    api_key: String,
+    base_url: String,
+    model: String,
 }
 
-#[derive(Deserialize)]
-struct ResponseMessage {
-    content: String,
+impl UnifiedClient {
+    pub fn new(provider: Provider) -> Result<Self> {
+        let client = Client::new();
+        
+        let (api_key, base_url, model) = match provider {
+            Provider::Deepseek => {
+                let key = env::var("DEEPSEEK_API_KEY")
+                    .context("DEEPSEEK_API_KEY not set")?;
+                (
+                    key,
+                    "https://api.deepseek.com/v1/chat/completions".to_string(),
+                    "deepseek-chat".to_string(),
+                )
+            }
+            Provider::Anthropic => {
+                let key = env::var("ANTHROPIC_API_KEY")
+                    .context("ANTHROPIC_API_KEY not set")?;
+                (
+                    key,
+                    "https://api.anthropic.com/v1/messages".to_string(),
+                    "claude-3-sonnet-20240229".to_string(),
+                )
+            }
+        };
+
+        Ok(Self {
+            client,
+            provider,
+            api_key,
+            base_url,
+            model,
+        })
+    }
+
+    fn build_headers(&self) -> Result<header::HeaderMap> {
+        let mut headers = header::HeaderMap::new();
+        
+        match self.provider {
+            Provider::Deepseek => {
+                headers.insert(
+                    "Authorization",
+                    format!("Bearer {}", self.api_key).parse().unwrap(),
+                );
+            }
+            Provider::Anthropic => {
+                headers.insert(
+                    "x-api-key",
+                    self.api_key.parse().unwrap(),
+                );
+                headers.insert(
+                    "anthropic-version",
+                    "2023-06-01".parse().unwrap(),
+                );
+            }
+        }
+        
+        headers.insert(
+            "Content-Type",
+            "application/json".parse().unwrap(),
+        );
+        
+        Ok(headers)
+    }
+
+    fn build_request(&self, messages: Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> serde_json::Value {
+        match self.provider {
+            Provider::Deepseek => {
+                serde_json::json!({
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": false
+                })
+            }
+            Provider::Anthropic => {
+                serde_json::json!({
+                    "model": self.model,
+                    "messages": messages,
+                    "max_tokens": ANTHROPIC_MAX_TOKENS,
+                    "temperature": ANTHROPIC_TEMPERATURE
+                })
+            }
+        }
+    }
+
+    async fn parse_response(&self, response_text: String) -> Result<UnifiedResponse> {
+        match self.provider {
+            Provider::Deepseek => {
+                #[derive(Debug, Deserialize)]
+                struct DeepseekResponse {
+                    choices: Vec<DeepseekChoice>,
+                    usage: DeepseekUsage,
+                }
+                
+                #[derive(Debug, Deserialize)]
+                struct DeepseekChoice {
+                    message: Message,
+                }
+                
+                #[derive(Debug, Deserialize)]
+                struct DeepseekUsage {
+                    total_tokens: i32,
+                }
+
+                let response: DeepseekResponse = serde_json::from_str(&response_text)?;
+                Ok(UnifiedResponse {
+                    content: response.choices[0].message.content.clone(),
+                    total_tokens: response.usage.total_tokens,
+                })
+            }
+            Provider::Anthropic => {
+                #[derive(Debug, Deserialize)]
+                struct AnthropicResponse {
+                    content: Vec<AnthropicContent>,
+                    usage: AnthropicUsage,
+                }
+                
+                #[derive(Debug, Deserialize)]
+                struct AnthropicContent {
+                    #[serde(rename = "type")]
+                    content_type: String,
+                    #[serde(rename = "text")]
+                    message: String,
+                }
+                
+                #[derive(Debug, Deserialize)]
+                struct AnthropicUsage {
+                    input_tokens: i32,
+                    output_tokens: i32,
+                }
+
+                let response: AnthropicResponse = serde_json::from_str(&response_text)?;
+                Ok(UnifiedResponse {
+                    content: response.content[0].message.clone(),
+                    total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+                })
+            }
+        }
+    }
+
+    pub async fn chat(&self, file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
+        let request = self.build_request(messages.clone(), temperature, max_tokens);
+        let headers = self.build_headers()?;
+        
+        let mut retries = 0;
+        let mut backoff_ms = INITIAL_BACKOFF_MS;
+
+        loop {
+            let response = self.client
+                .post(&self.base_url)
+                .headers(headers.clone())
+                .json(&request)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let response_text = response.text().await?;
+                println!("\n\nRaw API Response {}: {}", file_path, response_text);
+                return self.parse_response(response_text).await;
+            }
+
+            let status = response.status();
+            if !status.is_server_error() && status != 429 {
+                let error_text = response.text().await?;
+                anyhow::bail!("API request failed: {}", error_text);
+            }
+
+            if retries >= MAX_RETRIES {
+                let error_text = response.text().await?;
+                anyhow::bail!("Max retries exceeded. Last error: {}", error_text);
+            }
+
+            sleep(Duration::from_millis(backoff_ms)).await;
+            retries += 1;
+            backoff_ms *= 2;
+        }
+    }
 }
 
-pub async fn get_summaries(valid_files: Vec<String>, file_contents: HashMap<String, String>, prompt_template: String) -> Result<Vec<String>> {
-    let semaphore = Arc::new(Semaphore::new(10));
+pub async fn get_summaries(
+    valid_files: Vec<String>, 
+    file_contents: HashMap<String, String>, 
+    prompt_template: String
+) -> Result<Vec<String>> {
+    let provider = Provider::Anthropic;
+    let client = Arc::new(UnifiedClient::new(provider)?);
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     
     let mut handles = Vec::new();
     
     for file_path in valid_files {
         let permit = semaphore.clone().acquire_owned().await?;
         let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
-        let template = prompt_template.clone();
         let file_path_clone = file_path.clone();
+        let client = client.clone();
         
+        let prompt = prompt_template.replace("${${CONTENT}$}$", &content);
+
+        let messages: Vec<Message> = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
+
         let handle = tokio::spawn(async move {
-            let result = get_summary(content, template).await;
+            let result = client.chat(&file_path, &messages, None, None).await;
             drop(permit);
             match result {
-                Ok(summary) => summary,
-                Err(e) => format!("Error processing file {}: {}", file_path_clone, e)
+                Ok(response) => Ok(response.content),
+                Err(e) => Err(anyhow::anyhow!("Error processing file {}: {}", file_path_clone, e))
             }
         });
         
@@ -1204,57 +1550,11 @@ pub async fn get_summaries(valid_files: Vec<String>, file_contents: HashMap<Stri
     
     let mut results = Vec::new();
     for handle in handles {
-        results.push(handle.await?);
+        match handle.await? {
+            Ok(content) => results.push(content),
+            Err(e) => results.push(format!("Error: {}", e)),
+        }
     }
-    
     Ok(results)
 }
-
-pub async fn get_summary(text: String, prompt_template: String) -> Result<String> {
-    // Create API client
-    let client = Client::new();
-    
-    // Replace placeholder in template with actual text
-    let prompt = prompt_template.replace("{text}", &text);
-    
-    // Construct request payload
-    let request = DeepseekRequest {
-        model: "deepseek-chat".to_string(),
-        messages: vec![Message {
-            role: "user".to_string(),
-            content: prompt,
-        }],
-        temperature: 0.7,
-    };
-    
-    // Send request to Deepseek API
-    let response = client
-        .post("https://api.deepseek.com/v1/chat/completions")
-        .header(
-            "Authorization",
-            format!("Bearer {}", env::var("DEEPSEEK_API_KEY").context("DEEPSEEK_API_KEY not set")?)
-        )
-        .json(&request)
-        .send()
-        .await
-        .context("Failed to send request to Deepseek API")?;
-    
-    // Parse response
-    let deepseek_response = response
-        .json::<DeepseekResponse>()
-        .await
-        .context("Failed to parse Deepseek API response")?;
-    
-    // Extract summary from response
-    let summary = deepseek_response
-        .choices
-        .first()
-        .context("No response choices available")?
-        .message
-        .content
-        .clone();
-    
-    Ok(summary)
-}
-
 

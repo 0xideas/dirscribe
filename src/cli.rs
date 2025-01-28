@@ -1,6 +1,6 @@
 /*
 [DIRSCRIBE]
-Command-line tool for processing files based on extensions, applying summaries, and retrieving summaries. Supports filtering by paths, keywords, and Git commit diffs.
+Rust command-line tool for managing file summaries based on extensions, paths, keywords, and Git diffs. Supports summarizing, applying, and retrieving summaries.
 Defined: Cli,suffixes,prompt_template_path,output_path,dont_use_gitignore,summarize,apply,retrieve,exclude_paths,include_paths,or_keywords,and_keywords,exclude_keywords,diff_only,start_commit_id,end_commit_id
 Used: clap::Parser
 [/DIRSCRIBE]

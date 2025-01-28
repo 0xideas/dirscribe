@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
 use anyhow::Context;
+use crate::file_processing::filter_dirscribe_sections;
 
 const MAX_CONCURRENT_REQUESTS: usize = 1;
 const ANTHROPIC_MAX_TOKENS: i32 = 512;
@@ -320,10 +321,11 @@ pub async fn get_summaries(
     for file_path in valid_files {
         let permit = semaphore.clone().acquire_owned().await?;
         let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
+        let processed_content = filter_dirscribe_sections(&content, true);
         let file_path_clone = file_path.clone();
         let client = client.clone();
         
-        let prompt = prompt_template.replace("${${CONTENT}$}$", &content);
+        let prompt = prompt_template.replace("${${CONTENT}$}$", &processed_content);
 
         let messages: Vec<Message> = vec![Message {
             role: "user".to_string(),

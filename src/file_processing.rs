@@ -265,7 +265,8 @@ fn get_summaries_from_files(
 
     summaries
 }
-fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
+
+pub fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
         return String::new();

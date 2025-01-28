@@ -12,8 +12,6 @@ File Paths:
 File Summaries:
 
 
-Summaries have been written to the top of 9 files.
-
 Summary of ./tests/cli_test.rs:
 
 /*

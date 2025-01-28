@@ -1,86 +1,14 @@
-Please analyze the provided code file and generate a comprehensive documentation header that follows these requirements:
+Please analyze the provided code file and generate concise, information-dense summary of the different core functionalities that
+it performs. After that, list all classes, methods, functions, global variables, env variables or config values that are defined or used, in separate rows.
+Reduce the number of characters used to a minimum, while making sure that these lists are complete. This is very important.
+Format your response so that it can be used directly as an inline comment for the programming or config language used. DO NOT INCLUDE ANYTHING ELSE!
 
-Begin with a high-level overview that includes:
-
-The file's primary purpose and functionality
-Key dependencies and requirements
-Any important assumptions or constraints
-The intended usage context
-
-
-For each significant class, provide:
-
-A clear description of its purpose and responsibilities
-Its key attributes and properties
-Important relationships with other classes
-Usage examples if particularly complex
-
-
-For each significant function and method, document:
-
-Its purpose and functionality
-Parameters and their types
-Return values and types
-Any side effects or state changes
-Exceptions or error conditions
-Usage examples for complex cases
-
-
-Include any critical implementation notes:
-
-Performance considerations
-Threading/concurrency implications
-Security considerations
-Known limitations or edge cases
-
-
-Format the documentation as a multi-line comment using the appropriate syntax for the file's programming language:
-
-Python: Use triple quotes (""")
-JavaScript/TypeScript: Use /* */
-Java/C#: Use /* */
-C/C++: Use /* */
-Ruby: Use =begin/=end
-Other languages: Use their standard multi-line comment syntax
-
-
-Follow these style guidelines:
-
-Use clear, concise language
-Maintain consistent indentation
-Use blank lines to separate major sections
-Keep line lengths reasonable (typically 80-120 characters)
-Use consistent capitalization and punctuation
-
-
-Structure the output as:
-
+Follow this structure:
 [LANGUAGE-APPROPRIATE COMMENT OPENING]
-File: [filename]
-Date: [if available]
-Last Modified: [if available]
-
-OVERVIEW
---------
-[File description and purpose]
-
-DEPENDENCIES
-------------
-[Key dependencies and requirements]
-
-CLASSES
--------
-[Class documentation]
-
-FUNCTIONS
----------
-[Function documentation]
-
-IMPLEMENTATION NOTES
--------------------
-[Critical implementation details]
+[The literal "[DIRSCRIBE]"]
+[Consise, dense summary of core functionality]
+[List of  classes, methods, functions, global variables, env variables or config values that are defined in the file]
+[List of  classes, methods, functions, global variables, env variables or config values that are called or used in the file]
 [LANGUAGE-APPROPRIATE COMMENT CLOSING]
-
-Please maintain professional tone and technical accuracy while ensuring the documentation is accessible to developers who may be new to the codebase.
 
 ${${CONTENT}$}$

@@ -7,13 +7,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Semaphore;
-use backoff::{ExponentialBackoff, retry};
 
-const API_TIMEOUT_SECONDS: u64 = 30;
+const API_TIMEOUT_SECONDS: u64 = 1800;
 const MAX_RETRIES: u32 = 1;
-const MAX_CONCURRENT_REQUESTS: usize = 5;
+const MAX_CONCURRENT_REQUESTS: usize = 10;
 const DEFAULT_MODEL: &str = "deepseek-chat";
-const MAX_INPUT_LENGTH: usize = 4096;  // Example limit, check actual API docs
 
 #[derive(Debug, Serialize)]
 struct DeepseekRequest {
@@ -78,11 +76,6 @@ impl DeepseekClient {
         })
     }
 
-    pub fn with_model(mut self, model: String) -> Self {
-        self.model = model;
-        self
-    }
-
     async fn get_summary_with_retry(&self, text: &str, prompt_template: &str) -> Result<String> {
         let mut attempts = 0;
         let max_attempts = MAX_RETRIES;
@@ -93,6 +86,7 @@ impl DeepseekClient {
             match self.get_summary_once(text, prompt_template).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
+                    println!("{}", e);
                     if attempts >= max_attempts {
                         return Err(e.context("Max retry attempts reached"));
                     }
@@ -113,11 +107,6 @@ impl DeepseekClient {
     }
 
     async fn get_summary_once(&self, text: &str, prompt_template: &str) -> Result<String> {
-        // Validate input length
-        if text.len() > MAX_INPUT_LENGTH {
-            bail!("Input text exceeds maximum length of {} characters", MAX_INPUT_LENGTH);
-        }
-
         // Replace placeholder in template
         let prompt = prompt_template.replace("${${CONTENT}$}$", text);
 
@@ -153,10 +142,8 @@ impl DeepseekClient {
         // Handle different status codes
         match response.status() {
             StatusCode::OK => {
-                let deepseek_response = response
-                    .json::<DeepseekResponse>()
-                    .await
-                    .context("Failed to parse Deepseek API response")?;
+                let body = response.text().await?;
+                let deepseek_response: DeepseekResponse = serde_json::from_str(&body)?;
 
                 // Check for API-level errors
                 if let Some(error) = deepseek_response.error {

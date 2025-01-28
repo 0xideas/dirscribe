@@ -9,6 +9,7 @@ Follow this structure:
 [Consise, dense summary of core functionality]
 [List of  classes, methods, functions, global variables, env variables or config values that are defined in the file]
 [List of  classes, methods, functions, global variables, env variables or config values that are called or used in the file]
+[The literal "[/DIRSCRIBE]"]
 [LANGUAGE-APPROPRIATE COMMENT CLOSING]
 
 ${${CONTENT}$}$

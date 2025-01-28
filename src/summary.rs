@@ -1,183 +1,113 @@
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
-use serde_json;
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use std::env;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::Semaphore;
+use std::sync::Arc;
+use anyhow::Context;
 
-const API_TIMEOUT_SECONDS: u64 = 1800;
-const MAX_RETRIES: u32 = 1;
+
 const MAX_CONCURRENT_REQUESTS: usize = 10;
-const DEFAULT_MODEL: &str = "deepseek-chat";
+
 
 #[derive(Debug, Serialize)]
-struct DeepseekRequest {
+struct ChatRequest {
     model: String,
-    messages: Vec<Message>
+    messages: Vec<Message>,
+    temperature: Option<f32>,
+    max_tokens: Option<i32>,
+    stream: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Message {
     role: String,
     content: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct DeepseekResponse {
+struct ChatResponse {
+    id: String,
+    model: String,
     choices: Vec<Choice>,
-    #[serde(default)]
-    error: Option<DeepseekError>,
-}
-
-#[derive(Debug, Deserialize)]
-struct DeepseekError {
-    message: String,
-    #[serde(default)]
-    code: Option<String>,
+    usage: Usage,
 }
 
 #[derive(Debug, Deserialize)]
 struct Choice {
-    message: ResponseMessage,
+    index: i32,
+    message: Message,
+    finish_reason: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct ResponseMessage {
-    content: String,
+struct Usage {
+    prompt_tokens: i32,
+    completion_tokens: i32,
+    total_tokens: i32,
 }
 
-struct DeepseekClient {
+pub struct DeepseekClient {
     client: Client,
     api_key: String,
-    model: String,
     base_url: String,
 }
 
 impl DeepseekClient {
     pub fn new() -> Result<Self> {
-        // Check for API key at initialization
+        let client = Client::new();
         let api_key = env::var("DEEPSEEK_API_KEY")
-            .context("DEEPSEEK_API_KEY not set")?;
-            
-        // Create client with timeout
-        let client = Client::builder()
-            .timeout(Duration::from_secs(API_TIMEOUT_SECONDS))
-            .build()
-            .context("Failed to create HTTP client")?;
-            
+        .context("DEEPSEEK_API_KEY not set")?;
         Ok(Self {
             client,
             api_key,
-            model: DEFAULT_MODEL.to_string(),
-            base_url: format!("https://api.deepseek.com/chat/completions"),
+            base_url: "https://api.deepseek.com/chat/completions".to_string(),
         })
     }
 
-    async fn get_summary_with_retry(&self, text: &str, prompt_template: &str) -> Result<String> {
-        let mut attempts = 0;
-        let max_attempts = MAX_RETRIES;
-        let mut delay_ms = 1000; // Start with 1 second delay
-
-        loop {
-            attempts += 1;
-            match self.get_summary_once(text, prompt_template).await {
-                Ok(result) => return Ok(result),
-                Err(e) => {
-                    println!("{}", e);
-                    if attempts >= max_attempts {
-                        return Err(e.context("Max retry attempts reached"));
-                    }
-
-                    // Only retry on certain errors (like rate limits)
-                    if !matches!(e.downcast_ref::<reqwest::Error>(), Some(e) if e.is_timeout() || e.is_connect()) 
-                        && !e.to_string().contains("Rate limit exceeded") {
-                        return Err(e);
-                    }
-
-                    // Exponential backoff with jitter
-                    let jitter = rand::random::<u64>() % 100;
-                    tokio::time::sleep(Duration::from_millis(delay_ms + jitter)).await;
-                    delay_ms *= 2; // Double the delay for next attempt
-                }
-            }
-        }
-    }
-
-    async fn get_summary_once(&self, text: &str, prompt_template: &str) -> Result<String> {
-        // Replace placeholder in template
-        let prompt = prompt_template.replace("${${CONTENT}$}$", text);
-
-        // Construct request
-        let request = DeepseekRequest {
-            model: self.model.clone(),
-            messages: vec![Message {
-                role: "user".to_string(),
-                content: prompt,
-            }]
+    pub async fn chat(&self, file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<ChatResponse> {
+        let request = ChatRequest {
+            model: "deepseek-chat".to_string(),
+            messages: messages.clone(), // Clone the messages to own them
+            temperature,
+            max_tokens,
+            stream: Some(false),
         };
 
-        let request_body = serde_json::to_string(&request)
-            .unwrap_or_else(|_| String::from("{}"));
-            
-        println!("\ncurl -X POST \"{}\" \\", self.base_url);
-        println!("  -H \"Authorization: Bearer {}\" \\", self.api_key);
-        println!("  -H \"Content-Type: application/json\" \\");
-        println!("  -d '{}'", request_body.replace("'", "'\"'\"'"));
-            
-        // Send request
+        let mut headers = header::HeaderMap::new();
+        headers.insert(
+            "Authorization",
+            format!("Bearer {}", self.api_key).parse().unwrap(),
+        );
+        headers.insert(
+            "Content-Type",
+            "application/json".parse().unwrap(),
+        );
+
         let response = self.client
             .post(&self.base_url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .headers(headers)
             .json(&request)
             .send()
-            .await
-            .context("Failed to send request to Deepseek API")?;
-            
-        println!("\n=== Received response ===");
-        println!("Status: {}", response.status());
+            .await?;
 
-        // Handle different status codes
-        match response.status() {
-            StatusCode::OK => {
-                let body = response.text().await?;
-                let deepseek_response: DeepseekResponse = serde_json::from_str(&body)?;
-
-                // Check for API-level errors
-                if let Some(error) = deepseek_response.error {
-                    bail!("Deepseek API error: {} (code: {:?})", 
-                          error.message, error.code);
-                }
-
-                // Validate response
-                let summary = deepseek_response
-                    .choices
-                    .first()
-                    .context("No response choices available")?
-                    .message
-                    .content
-                    .clone();
-
-                if summary.trim().is_empty() {
-                    bail!("Received empty summary from API");
-                }
-
-                Ok(summary)
-            },
-            StatusCode::TOO_MANY_REQUESTS => {
-                bail!("Rate limit exceeded");
-            },
-            StatusCode::UNAUTHORIZED => {
-                bail!("Invalid API key");
-            },
-            status => {
-                bail!("Unexpected status code: {}", status);
-            }
+        if !response.status().is_success() {
+            let error_text = response.text().await?;
+            anyhow::bail!("API request failed: {}", error_text);
         }
+
+        // Print the raw response for debugging
+        let response_text = response.text().await?;
+        println!("\n\nRaw API Response {}: {}", file_path, response_text);
+        
+        // Parse the response text into our structure
+        let chat_response: ChatResponse = serde_json::from_str(&response_text)
+            .map_err(|e| anyhow::anyhow!("Failed to parse response: {}. Response body: {}", e, response_text))?;
+        Ok(chat_response)
     }
 }
+
 
 pub async fn get_summaries(
     valid_files: Vec<String>, 
@@ -199,12 +129,19 @@ pub async fn get_summaries(
         let file_path_clone = file_path.clone();
         let client = client.clone();
         
+        let prompt = prompt_template.replace("${${CONTENT}$}$",  &content);
+
+        let messages: Vec<Message> = vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }];
+
         let handle = tokio::spawn(async move {
-            let result = client.get_summary_with_retry(&content, &template).await;
+            let result = client.chat(&file_path, &messages, None, None).await;
             drop(permit);
             match result {
-                Ok(summary) => summary,
-                Err(e) => format!("Error processing file {}: {}", file_path_clone, e)
+                Ok(response) => Ok(response.choices[0].message.content.clone()),
+                Err(e) => Err(anyhow::anyhow!("Error processing file {}: {}", file_path_clone, e))
             }
         });
         
@@ -213,8 +150,10 @@ pub async fn get_summaries(
     
     let mut results = Vec::new();
     for handle in handles {
-        results.push(handle.await?);
+        match handle.await? {
+            Ok(content) => results.push(content),
+            Err(e) => results.push(format!("Error: {}", e)),
+        }
     }
-    
     Ok(results)
 }

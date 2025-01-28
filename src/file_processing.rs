@@ -247,22 +247,18 @@ fn remove_dirscribe_sections(content: &str) -> String {
         (prev, current, next)
     });
 
-    // Filter lines based on DIRSCRIBE context
     let mut in_dirscribe = false;
     let filtered_lines: Vec<&str> = with_context
         .filter(|(prev, current, next)| {
-            // Check if we're entering a DIRSCRIBE section
-            if current.contains("[DIRSCRIBE]") {
+            if current.contains("[DIRSCRIBE]") && !current.contains("current.contains(\"[DIRSCRIBE]\") && ") {
                 in_dirscribe = true;
                 return false;
             }
-            // Check if we're exiting a DIRSCRIBE section
-            if current.contains("[/DIRSCRIBE]") {
+            if current.contains("[/DIRSCRIBE]") && !current.contains("if current.contains(\"[/DIRSCRIBE]\") && ") {
                 in_dirscribe = false;
                 return false;
             }
             
-            // Skip if we're inside a DIRSCRIBE section
             if in_dirscribe {
                 return false;
             }

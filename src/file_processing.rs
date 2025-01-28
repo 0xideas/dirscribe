@@ -265,14 +265,14 @@ fn remove_dirscribe_sections(content: &str) -> String {
 
             // Skip if next line starts DIRSCRIBE
             if let Some(next_line) = next {
-                if next_line.contains("[DIRSCRIBE]") && !next_line.contains("if next_line.contains(\"[DIRSCRIBE]\") && ")  {
+                if next_line.contains("[DIRSCRIBE]") && !next_line.contains("if current.contains(\"[DIRSCRIBE]\") && ")  {
                     return false;
                 }
             }
 
             // Skip if previous line ends DIRSCRIBE
             if let Some(prev_line) = prev {
-                if prev_line.contains("[/DIRSCRIBE]") && !prev_line.contains("if prev_line.contains(\"[/DIRSCRIBE]\") && ") {
+                if prev_line.contains("[/DIRSCRIBE]") && !prev_line.contains("if current.contains(\"[/DIRSCRIBE]\") && ") {
                     return false;
                 }
             }

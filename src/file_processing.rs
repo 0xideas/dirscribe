@@ -261,7 +261,7 @@ fn remove_dirscribe_sections(content: &str) -> String {
 
             if let Some(prev_line) = prev {
                 if in_dirscribe && prev_line.contains("[/DIRSCRIBE]"){
-                    in_dirscribe = true;
+                    in_dirscribe = false;
                     return false;
                 }
             }

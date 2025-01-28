@@ -172,9 +172,10 @@ pub async fn process_directory(
         };
         
         if apply && !diff_only {
+            let suffix_map = create_comment_map();
             // Zip together the files and their summaries
             for (file_path, summary) in valid_files.iter().zip(summaries.iter()) {
-                if let Err(e) = write_summary_to_file(file_path, summary) {
+                if let Err(e) = write_summary_to_file(file_path, summary, suffix_map.clone()) {
                     eprintln!("Error writing summary to {}: {}", file_path.display(), e);
                 }
             }
@@ -217,10 +218,21 @@ pub async fn process_directory(
         .map_err(Into::into)
 }
 
-fn check_summary(s: &str) -> bool {
-    s.split('\n').nth(0).map_or(true, |f| f.len() <= 4) && s.split('\n').last().map_or(true, |l| l.len() <= 4)
+fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
+    let extension = file_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or(""); 
+    if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+        s.split('\n')
+            .nth(0)
+            .map_or(true, |f| f.trim() == *multi_line_comment_start && 
+                s.split('\n')
+                    .last()
+                    .map_or(true, |l| l.trim() == *multi_line_comment_end))
+    } else {
+        false
+    }
 }
-
 fn check_prefix(s: &str) -> bool {
     let lines: Vec<_> = s.split('\n').collect();
     if lines.is_empty() { return true; }
@@ -297,8 +309,8 @@ fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     filtered_lines.join("\n")
 }
 
-pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<()> {
-    if check_summary(summary) | check_prefix(summary) {
+pub fn write_summary_to_file(file_path: &Path, summary: &str, suffix_map: HashMap<&'static str, (&'static str, &'static str)>) -> anyhow::Result<()> {
+    if check_summary(file_path, summary, &suffix_map) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;    
         println!("content: {}", content); 
         let processed_content = filter_dirscribe_sections(&content, true);
@@ -476,4 +488,185 @@ fn is_likely_text_file(path: &Path) -> bool {
     }
 
     false
+}
+
+
+
+
+fn create_comment_map() -> HashMap<&'static str, (&'static str, &'static str)> {
+    let mut map = HashMap::new();
+    
+    // ActionScript
+    map.insert("as", ("/*", "*/"));
+    
+    // Ada
+    map.insert("ada", ("/*", "*/"));
+    map.insert("adb", ("/*", "*/"));
+    map.insert("ads", ("/*", "*/"));
+    
+    // AppleScript
+    map.insert("scpt", ("(*", "*)"));
+    map.insert("applescript", ("(*", "*)"));
+    
+    // Assembly
+    map.insert("asm", ("/*", "*/"));
+    map.insert("s", ("/*", "*/"));
+    
+    // AWK
+    map.insert("awk", ("/*", "*/"));
+    
+    // Bash
+    map.insert("sh", (":'", "'"));
+    map.insert("bash", (":'", "'"));
+    
+    // C
+    map.insert("c", ("/*", "*/"));
+    map.insert("h", ("/*", "*/"));
+    
+    // C#
+    map.insert("cs", ("/*", "*/"));
+    
+    // C++
+    map.insert("cpp", ("/*", "*/"));
+    map.insert("hpp", ("/*", "*/"));
+    map.insert("cc", ("/*", "*/"));
+    map.insert("hh", ("/*", "*/"));
+    map.insert("cxx", ("/*", "*/"));
+    map.insert("hxx", ("/*", "*/"));
+    
+    // COBOL
+    map.insert("cob", ("/*", "*/"));
+    map.insert("cbl", ("/*", "*/"));
+    
+    // CoffeeScript
+    map.insert("coffee", ("###", "###"));
+    
+    // CSS
+    map.insert("css", ("/*", "*/"));
+    
+    // D
+    map.insert("d", ("/*", "*/"));
+    
+    // Dart
+    map.insert("dart", ("/*", "*/"));
+    
+    // Delphi
+    map.insert("pas", ("{", "}"));
+    map.insert("dpr", ("{", "}"));
+    
+    // Elixir
+    map.insert("ex", ("#=", "=#"));
+    map.insert("exs", ("#=", "=#"));
+    
+    // Erlang
+    map.insert("erl", ("%%%", "%%%"));
+    map.insert("hrl", ("%%%", "%%%"));
+    
+    // F#
+    map.insert("fs", ("(*", "*)"));
+    map.insert("fsx", ("(*", "*)"));
+    
+    // Go
+    map.insert("go", ("/*", "*/"));
+    
+    // Groovy
+    map.insert("groovy", ("/*", "*/"));
+    map.insert("gvy", ("/*", "*/"));
+    
+    // Haskell
+    map.insert("hs", ("{-", "-}"));
+    map.insert("lhs", ("{-", "-}"));
+    
+    // HTML
+    map.insert("html", ("<!--", "-->"));
+    map.insert("htm", ("<!--", "-->"));
+    
+    // Java
+    map.insert("java", ("/*", "*/"));
+    
+    // JavaScript
+    map.insert("js", ("/*", "*/"));
+    map.insert("mjs", ("/*", "*/"));
+    
+    // Julia
+    map.insert("jl", ("#=", "=#"));
+    
+    // Kotlin
+    map.insert("kt", ("/*", "*/"));
+    map.insert("kts", ("/*", "*/"));
+    
+    // LISP
+    map.insert("lisp", ("#|", "|#"));
+    map.insert("lsp", ("#|", "|#"));
+    map.insert("cl", ("#|", "|#"));
+    
+    // Lua
+    map.insert("lua", ("--[[", "]]"));
+    
+    // MATLAB
+    map.insert("m", ("%{", "%}"));
+    map.insert("mat", ("%{", "%}"));
+    
+    // OCaml
+    map.insert("ml", ("(*", "*)"));
+    map.insert("mli", ("(*", "*)"));
+    
+    // Pascal
+    map.insert("pas", ("{", "}"));
+    map.insert("pp", ("{", "}"));
+    
+    // Perl
+    map.insert("pl", ("=pod", "=cut"));
+    map.insert("pm", ("=pod", "=cut"));
+    
+    // PHP
+    map.insert("php", ("/*", "*/"));
+    
+    // PowerShell
+    map.insert("ps1", ("<#", "#>"));
+    map.insert("psm1", ("<#", "#>"));
+    map.insert("psd1", ("<#", "#>"));
+    
+    // Python
+    map.insert("py", ("'''", "'''"));
+    map.insert("pyw", ("'''", "'''"));
+    
+    // R
+    map.insert("r", ("/*", "*/"));
+    map.insert("R", ("/*", "*/"));
+    
+    // Ruby
+    map.insert("rb", ("=begin", "=end"));
+    map.insert("rbw", ("=begin", "=end"));
+    
+    // Rust
+    map.insert("rs", ("/*", "*/"));
+    
+    // Scala
+    map.insert("scala", ("/*", "*/"));
+    map.insert("sc", ("/*", "*/"));
+    
+    // SQL
+    map.insert("sql", ("/*", "*/"));
+    
+    // Swift
+    map.insert("swift", ("/*", "*/"));
+    
+    // TypeScript
+    map.insert("ts", ("/*", "*/"));
+    map.insert("tsx", ("/*", "*/"));
+    
+    // VB.NET
+    map.insert("vb", ("'''", "'''"));
+    
+    // XML
+    map.insert("xml", ("<!--", "-->"));
+    map.insert("xsl", ("<!--", "-->"));
+    map.insert("xsd", ("<!--", "-->"));
+    
+    // YAML
+    map.insert("yml", ("'''", "'''"));
+    map.insert("yaml", ("'''", "'''"));
+    
+    map
 }

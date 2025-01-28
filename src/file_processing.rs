@@ -232,19 +232,61 @@ fn check_prefix(s: &str) -> bool {
     lines.iter().all(|l| l.trim_start().starts_with(if is_hash { "#" } else { "//" }))
 }
 
+
 fn remove_dirscribe_sections(content: &str) -> String {
     let lines: Vec<&str> = content.lines().collect();
-    let remove_indices: Vec<usize> = lines.iter().enumerate()
-        .filter(|(_, line)| line.contains("[DIRSCRIBE]") || line.contains("[/DIRSCRIBE]"))
-        .flat_map(|(i, _)| [i.saturating_sub(1), i, (i + 1).min(lines.len() - 1)])
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    // Create iterator tuples with (previous, current, next) lines
+    let with_context = (0..lines.len()).map(|i| {
+        let prev = if i > 0 { Some(lines[i - 1]) } else { None };
+        let current = lines[i];
+        let next = if i < lines.len() - 1 { Some(lines[i + 1]) } else { None };
+        (prev, current, next)
+    });
+
+    // Filter lines based on DIRSCRIBE context
+    let mut in_dirscribe = false;
+    let filtered_lines: Vec<&str> = with_context
+        .filter(|(prev, current, next)| {
+            // Check if we're entering a DIRSCRIBE section
+            if current.contains("[DIRSCRIBE]") {
+                in_dirscribe = true;
+                return false;
+            }
+            // Check if we're exiting a DIRSCRIBE section
+            if current.contains("[/DIRSCRIBE]") {
+                in_dirscribe = false;
+                return false;
+            }
+            
+            // Skip if we're inside a DIRSCRIBE section
+            if in_dirscribe {
+                return false;
+            }
+
+            // Skip if next line starts DIRSCRIBE
+            if let Some(next_line) = next {
+                if next_line.contains("[DIRSCRIBE]") {
+                    return false;
+                }
+            }
+
+            // Skip if previous line ends DIRSCRIBE
+            if let Some(prev_line) = prev {
+                if prev_line.contains("[/DIRSCRIBE]") {
+                    return false;
+                }
+            }
+
+            true
+        })
+        .map(|(_, current, _)| current)
         .collect();
 
-    lines.iter()
-        .enumerate()
-        .filter(|(i, _)| !remove_indices.contains(i))
-        .map(|(_, line)| *line)
-        .collect::<Vec<&str>>()
-        .join("\n")
+    filtered_lines.join("\n")
 }
 
 pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<()> {

@@ -1,3 +1,11 @@
+/*
+[DIRSCRIBE]
+This Rust code provides functionality for processing directories and files, including generating summaries, applying diffs, and filtering files based on keywords and paths. It also includes utility functions for working with Git repositories and checking for text files.
+
+Defined: process_directory,write_summary_to_file,process_file,check_for_keywords,is_likely_text_file,check_summary,check_prefix,remove_dirscribe_sections,get_diff_list,get_diff_str,filter_diff_for_file,get_summaries
+Used: std::fs,std::io,anyhow,std::path,ignore::WalkBuilder,std::collections::HashMap,git2::Repository,git2::Tree,crate::git,crate::summary
+[/DIRSCRIBE]
+*/
 use std::fs;
 use std::io::{self, Write, Cursor};
 use anyhow::Context;
@@ -226,9 +234,6 @@ fn check_prefix(s: &str) -> bool {
 
 fn remove_dirscribe_sections(content: &str) -> String {
     let lines: Vec<&str> = content.lines().collect();
-    let remove_indices: Vec<usize> = lines.iter().enumerate()
-        .filter(|(_, line)| line.contains("[DIRSCRIBE]") || line.contains("[/DIRSCRIBE]"))
-        .flat_map(|(i, _)| [i.saturating_sub(1), i, (i + 1).min(lines.len() - 1)])
         .collect();
 
     lines.iter()

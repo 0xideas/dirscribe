@@ -1,3 +1,11 @@
+/*
+[DIRSCRIBE]
+This Rust code provides a unified interface for interacting with different language model providers (Deepseek and Anthropic) and fetching summaries for a given set of files and a prompt template.
+
+Defined: Provider,Message,ProviderRequest,DeepseekRequest,AnthropicRequest,UnifiedResponse,UnifiedClient,MAX_CONCURRENT_REQUESTS,ANTHROPIC_MAX_TOKENS,ANTHROPIC_TEMPERATURE,MAX_RETRIES,INITIAL_BACKOFF_MS,get_summaries
+Used: reqwest,serde,tokio,anyhow,std,std,tokio,std,anyhow,env,std,tokio,Arc
+[/DIRSCRIBE]
+*/
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};

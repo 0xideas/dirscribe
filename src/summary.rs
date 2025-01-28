@@ -1,5 +1,6 @@
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
+use tokio::time::{sleep, Duration};
 use anyhow::Result;
 use std::env;
 use std::collections::HashMap;
@@ -10,6 +11,8 @@ use anyhow::Context;
 const MAX_CONCURRENT_REQUESTS: usize = 1;
 const ANTHROPIC_MAX_TOKENS: i32 = 300;
 const ANTHROPIC_TEMPERATURE: f32 = 0.1;
+const MAX_RETRIES: u32 = 6;
+const INITIAL_BACKOFF_MS: u64 = 1000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Provider {
@@ -206,23 +209,39 @@ impl UnifiedClient {
     pub async fn chat(&self, file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
         let request = self.build_request(messages.clone(), temperature, max_tokens);
         let headers = self.build_headers()?;
-
-        let response = self.client
-            .post(&self.base_url)
-            .headers(headers)
-            .json(&request)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await?;
-            anyhow::bail!("API request failed: {}", error_text);
-        }
-
-        let response_text = response.text().await?;
-        println!("\n\nRaw API Response {}: {}", file_path, response_text);
         
-        self.parse_response(response_text).await
+        let mut retries = 0;
+        let mut backoff_ms = INITIAL_BACKOFF_MS;
+
+        loop {
+            let response = self.client
+                .post(&self.base_url)
+                .headers(headers.clone())
+                .json(&request)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                let response_text = response.text().await?;
+                println!("\n\nRaw API Response {}: {}", file_path, response_text);
+                return self.parse_response(response_text).await;
+            }
+
+            let status = response.status();
+            if !status.is_server_error() && status != 429 {
+                let error_text = response.text().await?;
+                anyhow::bail!("API request failed: {}", error_text);
+            }
+
+            if retries >= MAX_RETRIES {
+                let error_text = response.text().await?;
+                anyhow::bail!("Max retries exceeded. Last error: {}", error_text);
+            }
+
+            sleep(Duration::from_millis(backoff_ms)).await;
+            retries += 1;
+            backoff_ms *= 2;
+        }
     }
 }
 

@@ -321,11 +321,8 @@ fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
 pub fn write_summary_to_file(file_path: &Path, summary: &str, suffix_map: HashMap<&'static str, (&'static str, &'static str)>) -> anyhow::Result<()> {
     if check_summary(file_path, summary, &suffix_map) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;    
-        println!("content: {}", content); 
         let processed_content = filter_dirscribe_sections(&content, true);
-        println!("processed_content: {}", processed_content); 
         let summary_block = format!("{}\n", summary);
-        println!("summary_block: {}", summary_block); 
         let new_content = summary_block + &processed_content;
         fs::write(file_path, new_content)?;
         Ok(())

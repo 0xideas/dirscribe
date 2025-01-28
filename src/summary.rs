@@ -285,7 +285,6 @@ impl UnifiedClient {
 
             if response.status().is_success() {
                 let response_text = response.text().await?;
-                println!("\n\nRaw API Response {}: {}", file_path, response_text);
                 return self.parse_response(response_text).await;
             }
 
@@ -312,7 +311,7 @@ pub async fn get_summaries(
     file_contents: HashMap<String, String>, 
     prompt_template: String
 ) -> Result<Vec<String>> {
-    let provider = Provider::Anthropic;
+    let provider = Provider::Ollama;
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     

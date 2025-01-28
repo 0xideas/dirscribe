@@ -223,7 +223,7 @@ fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (
         .and_then(|ext| ext.to_str())
         .unwrap_or(""); 
     if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
-        let lines: Vec<&str> = s.split('\n').collect();
+        let lines: Vec<&str> = s.trim().split('\n').collect();
         if lines.len() < 4 {
             return false;
         }

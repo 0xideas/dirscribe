@@ -26,6 +26,7 @@ pub struct Cli {
     #[arg(long, default_value_t = false)]
     pub apply: bool,
 
+
     /// Comma-separated list of paths to exclude
     #[arg(long)]
     pub exclude_paths: Option<String>,

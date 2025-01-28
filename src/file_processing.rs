@@ -224,11 +224,27 @@ fn check_prefix(s: &str) -> bool {
     lines.iter().all(|l| l.trim_start().starts_with(if is_hash { "#" } else { "//" }))
 }
 
+fn remove_dirscribe_sections(content: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let remove_indices: Vec<usize> = lines.iter().enumerate()
+        .filter(|(_, line)| line.contains("[DIRSCRIBE]") || line.contains("[/DIRSCRIBE]"))
+        .flat_map(|(i, _)| [i.saturating_sub(1), i, (i + 1).min(lines.len() - 1)])
+        .collect();
+
+    lines.iter()
+        .enumerate()
+        .filter(|(i, _)| !remove_indices.contains(i))
+        .map(|(_, line)| *line)
+        .collect::<Vec<&str>>()
+        .join("\n")
+}
+
 pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<()> {
     if check_summary(summary) | check_prefix(summary) {
-        let content = fs::read_to_string(file_path)?;        
+        let content = fs::read_to_string(file_path)?;    
+        let processed_content = remove_dirscribe_sections(&content);    
         let summary_block = format!("{}\n", summary);
-        let new_content = summary_block + &content;
+        let new_content = summary_block + &processed_content;
         fs::write(file_path, new_content)?;
         Ok(())
     } else {
@@ -236,6 +252,7 @@ pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<
 
     }
 }
+
 
 pub fn process_file(
     file_path: &PathBuf,

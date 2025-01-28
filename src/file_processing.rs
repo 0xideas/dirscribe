@@ -217,7 +217,7 @@ pub fn write_summary_to_file(file_path: &Path, summary: &str) -> io::Result<()> 
     let content = fs::read_to_string(file_path)?;
     
     // Create the summary comment block
-    let summary_block = format!("{}", summary);
+    let summary_block = format!("{}\n", summary);
     
     // Combine summary with original content
     let new_content = summary_block + &content;

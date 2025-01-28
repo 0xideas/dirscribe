@@ -59,6 +59,14 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         &cli.include_paths,
     )?;
 
+    if cli.apply && !cli.summarize {
+        return Err(ValidationError("--apply can only be used with --summarize".into()).into());
+    }
+
+    if cli.apply && cli.diff_only {
+        return Err(ValidationError("--apply cannot be used with --diff-only".into()).into());
+    }
+
     Ok(())
 }
 

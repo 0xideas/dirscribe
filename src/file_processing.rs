@@ -15,7 +15,7 @@ pub async fn process_directory(
     dont_use_gitignore: bool,
     summarize: bool,
     summarize_prompt_templates: HashMap<String, String>,
-    _apply: bool,
+    apply: bool,
     diff_only: bool,
     exclude_paths: &[PathBuf],
     include_paths: &[PathBuf],
@@ -166,6 +166,18 @@ pub async fn process_directory(
             get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
         };
         
+        if summarize && apply && !diff_only {
+            // Zip together the files and their summaries
+            for (file_path, summary) in valid_files.iter().zip(summaries.iter()) {
+                if let Err(e) = write_summary_to_file(file_path, summary) {
+                    eprintln!("Error writing summary to {}: {}", file_path.display(), e);
+                }
+            }
+            
+            // Add a message to the output indicating files were modified
+            write!(output, "\nSummaries have been written to the top of {} files.\n", valid_files.len())?;
+        }
+    
         // Use the original valid_files order
         valid_files.iter().zip(summaries.iter())
             .map(|(file, summary)| {
@@ -198,6 +210,22 @@ pub async fn process_directory(
     String::from_utf8(output.into_inner())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
         .map_err(Into::into)
+}
+
+pub fn write_summary_to_file(file_path: &Path, summary: &str) -> io::Result<()> {
+    // Read the existing content
+    let content = fs::read_to_string(file_path)?;
+    
+    // Create the summary comment block
+    let summary_block = format!("{}", summary);
+    
+    // Combine summary with original content
+    let new_content = summary_block + &content;
+    
+    // Write back to file
+    fs::write(file_path, new_content)?;
+    
+    Ok(())
 }
 
 pub fn process_file(

@@ -1,0 +1,106 @@
+File Paths:
+./tests/cli_test.rs
+./src/prompt_handling.rs
+./src/git.rs
+./src/validation.rs
+./src/output.rs
+./src/main.rs
+./src/file_processing.rs
+./src/cli.rs
+./src/summary.rs
+
+File Summaries:
+
+
+Summaries have been written to the top of 9 files.
+
+Summary of ./tests/cli_test.rs:
+
+/*
+[DIRSCRIBE]
+Runs dirscribe command & compares output with ground truth. Tests diff-only mode.
+Defined: setup,test_dirscribe_output_matches_ground_truth,test_dirscribe_diff_only_output_matches_ground_truth,INIT
+Used: std::process::Command,std::fs,similar::{ChangeTag,TextDiff},std::sync::Once
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/prompt_handling.rs:
+
+/*
+[DIRSCRIBE]
+Loads text prompts from files in a directory into a HashMap, mapping file names to file contents.
+Defined: load_prompts
+Used: std::collections::HashMap,std::fs
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/git.rs:
+
+/*
+[DIRSCRIBE]
+Provides functionality to get a list of changed files between two Git commits or the working directory and a commit, get the diff string for a Git diff, and filter a diff string to only include changes for a specific file.
+Defined: get_diff_list,get_diff_str,filter_diff_for_file,get_tree
+Used: io,path,PathBuf,Repository,Tree,Diff,DiffFormat
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/validation.rs:
+
+/*
+[DIRSCRIBE]
+Validates CLI arguments, paths, git-related arguments, keywords, and path filters for a program.
+Defined: ValidationError,validate_cli_args,validate_suffixes,validate_template_path,validate_output_path,validate_git_args,validate_commit,validate_keywords,validate_path_filters
+Used: std::path::{Path,PathBuf},crate::cli::Cli,git2::Repository,anyhow::Result,std::error::Error,std::fmt
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/output.rs:
+
+/*
+[DIRSCRIBE]
+Provides functionality to write content to the system clipboard and process content with a template file.
+Defined: write_to_clipboard,process_with_template,fs,anyhow,Result,bail,clipboard,ClipboardContext,ClipboardProvider
+Used: std,anyhow,clipboard
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/main.rs:
+
+/*
+[DIRSCRIBE]
+Summarizes code files in a directory, applies prompts, and outputs the result to a file or clipboard. Handles Git commits, file extensions, and keyword filtering.
+Defined: std::fs::File,cli,git,file_processing,output,prompt_handling,summary,validation,Cli,process_directory,write_to_clipboard,process_with_template,Parser,validate_cli_args,Result,Context,Write,PathBuf,load_prompts,main
+Used: fs::File,cli::Cli,file_processing::process_directory,output::write_to_clipboard,output::process_with_template,clap::Parser,validation::validate_cli_args,anyhow::Result,anyhow::Context,io::Write,path::PathBuf,prompt_handling::load_prompts
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/file_processing.rs:
+
+/*
+[DIRSCRIBE]
+Provides functionality for processing files in a directory, including filtering by file extension, applying keyword filters, generating summaries, and writing summaries to files. Also supports Git diff functionality to process only changed files between commits.
+Defined: process_directory,write_summary_to_file,process_file,check_for_keywords,is_likely_text_file
+Used: std::fs,std::io,anyhow,std::path,ignore::WalkBuilder,std::collections::HashMap,git2,crate::git,crate::summary
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/cli.rs:
+
+/*
+[DIRSCRIBE]
+This code defines a command-line interface (CLI) using the clap crate in Rust. It allows users to specify various options for processing files, such as file extensions, prompt template path, output path, gitignore rules, summarization, applying summaries, excluding/including paths, filtering by keywords, showing only files with differences, and specifying commit hashes for diff comparison.
+
+Defined: Cli,suffixes,prompt_template_path,output_path,dont_use_gitignore,summarize,apply,exclude_paths,include_paths,or_keywords,and_keywords,exclude_keywords,diff_only,start_commit_id,end_commit_id
+Used: clap::Parser,Parser,derive
+[/DIRSCRIBE]
+*/
+
+Summary of ./src/summary.rs:
+
+/*
+[DIRSCRIBE]
+This Rust code provides a unified client for interacting with different language model providers (Deepseek and Anthropic) and generating summaries for files based on their contents. It supports concurrent requests with a configurable limit, retries with exponential backoff, and environment variables for API keys.
+Defined: Provider,Message,ProviderRequest,DeepseekRequest,AnthropicRequest,UnifiedResponse,UnifiedClient,build_headers,build_request,parse_response,chat,get_summaries
+Used: reqwest,serde,tokio,anyhow,std,std,std,tokio,std,anyhow,MAX_CONCURRENT_REQUESTS,ANTHROPIC_MAX_TOKENS,ANTHROPIC_TEMPERATURE,MAX_RETRIES,INITIAL_BACKOFF_MS
+[/DIRSCRIBE]
+*/

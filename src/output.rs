@@ -1,10 +1,3 @@
-/*
-[DIRSCRIBE]
-Provides functionality to write content to the system clipboard and process content with a template file.
-Defined: write_to_clipboard,process_with_template,fs,anyhow,Result,bail,clipboard,ClipboardContext,ClipboardProvider
-Used: std,fs,anyhow,Result,bail,clipboard,ClipboardContext,ClipboardProvider
-[/DIRSCRIBE]
-*/
 use std::fs;
 use anyhow::{Result, bail};
 use clipboard::{ClipboardContext, ClipboardProvider};

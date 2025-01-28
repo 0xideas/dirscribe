@@ -1,11 +1,3 @@
-/*
-[DIRSCRIBE]
-This code defines a command-line interface (CLI) using the clap crate in Rust. The CLI allows users to specify various options for processing files, such as file extensions, prompt template path, output path, gitignore rules, summarization, applying summaries, excluding/including paths, filtering by keywords, showing only files with differences, and specifying commit hashes for diff comparison.
-
-Defined: Cli,suffixes,prompt_template_path,output_path,dont_use_gitignore,summarize,apply,exclude_paths,include_paths,or_keywords,and_keywords,exclude_keywords,diff_only,start_commit_id,end_commit_id
-Used: clap::Parser,Parser,derive,command,arg,long,default_value_t,Option,String,bool
-[/DIRSCRIBE]
-*/
 use clap::Parser;
 
 #[derive(Parser)]

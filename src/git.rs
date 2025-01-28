@@ -1,10 +1,3 @@
-/*
-[DIRSCRIBE]
-Provides functionality to get a list of changed files between two Git commits or between a commit and the working directory, get the diff string for a Git diff, and filter the diff string to only include changes for a specific file.
-Defined: get_diff_list,get_diff_str,filter_diff_for_file,get_tree
-Used: io,Path,PathBuf,Repository,Tree,Diff,DiffFormat
-[/DIRSCRIBE]
-*/
 use std::io;
 use std::path::{Path, PathBuf};
 use git2::{Repository, Tree, Diff, DiffFormat};

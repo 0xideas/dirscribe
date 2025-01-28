@@ -246,38 +246,27 @@ fn remove_dirscribe_sections(content: &str) -> String {
         let next = if i < lines.len() - 1 { Some(lines[i + 1]) } else { None };
         (prev, current, next)
     });
-
+    let mut line_number = 0;
     let mut in_dirscribe = false;
     let filtered_lines: Vec<&str> = with_context
         .filter(|(prev, current, next)| {
-            if current.contains("[DIRSCRIBE]") && !current.contains("current.contains(\"[DIRSCRIBE]\") && ") {
-                in_dirscribe = true;
-                return false;
-            }
-            if current.contains("[/DIRSCRIBE]") && !current.contains("if current.contains(\"[/DIRSCRIBE]\") && ") {
-                in_dirscribe = false;
-                return false;
-            }
-            
-            if in_dirscribe {
-                return false;
-            }
+            line_number += 1;
 
-            // Skip if next line starts DIRSCRIBE
             if let Some(next_line) = next {
-                if next_line.contains("[DIRSCRIBE]") && !next_line.contains("if current.contains(\"[DIRSCRIBE]\") && ")  {
+                if line_number < 3 && next_line.contains("[DIRSCRIBE]") {
+                    in_dirscribe = true;
                     return false;
                 }
             }
 
-            // Skip if previous line ends DIRSCRIBE
             if let Some(prev_line) = prev {
-                if prev_line.contains("[/DIRSCRIBE]") && !prev_line.contains("if current.contains(\"[/DIRSCRIBE]\") && ") {
+                if in_dirscribe && prev_line.contains("[/DIRSCRIBE]"){
+                    in_dirscribe = true;
                     return false;
                 }
             }
 
-            true
+            !in_dirscribe
         })
         .map(|(_, current, _)| current)
         .collect();

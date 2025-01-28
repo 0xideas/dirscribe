@@ -234,6 +234,9 @@ fn check_prefix(s: &str) -> bool {
 
 fn remove_dirscribe_sections(content: &str) -> String {
     let lines: Vec<&str> = content.lines().collect();
+    let remove_indices: Vec<usize> = lines.iter().enumerate()
+        .filter(|(_, line)| line.contains("[DIRSCRIBE]") || line.contains("[/DIRSCRIBE]"))
+        .flat_map(|(i, _)| [i.saturating_sub(1), i, (i + 1).min(lines.len() - 1)])
         .collect();
 
     lines.iter()

@@ -1,10 +1,3 @@
-/*
-[DIRSCRIBE]
-This code provides functionality for processing directories and files, including generating summaries or diffs, applying summaries to files, and filtering files based on various criteria.
-Defined: process_directory,check_summary,check_prefix,get_summaries_from_files,filter_dirscribe_sections,write_summary_to_file,process_file,check_for_keywords,is_likely_text_file,create_comment_map
-Used: std::fs,std::io,anyhow,std::path,ignore::WalkBuilder,std::collections::HashMap,git2,crate::git,crate::summary
-[/DIRSCRIBE]
-*/
 use std::fs;
 use std::io::{self, Write, Cursor};
 use std::path::{Path, PathBuf};

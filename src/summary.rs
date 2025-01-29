@@ -1,11 +1,3 @@
-/*
-[DIRSCRIBE]
-This Rust code provides a unified client for interacting with different language model providers (Deepseek, Anthropic, and Ollama). It handles API requests, response parsing, and retries for failed requests. The main functionality is to send chat messages to the providers and receive responses.
-
-Defined: Provider,Message,ProviderRequest,DeepseekRequest,AnthropicRequest,OllamaRequest,UnifiedResponse,UnifiedClient,MAX_CONCURRENT_REQUESTS,ANTHROPIC_MAX_TOKENS,ANTHROPIC_TEMPERATURE,MAX_RETRIES,INITIAL_BACKOFF_MS,new,build_headers,build_request,parse_response,chat,get_summaries
-Used: reqwest,serde,tokio,anyhow,std,std,std,tokio,std,anyhow
-[/DIRSCRIBE]
-*/
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
@@ -15,6 +7,7 @@ use std::path::Path;
 use std::collections::HashMap;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
+use std::str::FromStr;
 use crate::file_processing::filter_dirscribe_sections;
 
 const MAX_CONCURRENT_REQUESTS: usize = 1;
@@ -23,11 +16,29 @@ const ANTHROPIC_TEMPERATURE: f32 = 0.1;
 const MAX_RETRIES: u32 = 6;
 const INITIAL_BACKOFF_MS: u64 = 1000;
 
+const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-chat";
+const DEFAULT_ANTHROPIC_MODEL: &str = "claude-3-sonnet-20240229";
+const DEFAULT_OLLAMA_MODEL: &str = "deepseek-r1:8b";
+
 #[derive(Debug, Clone, Copy)]
 pub enum Provider {
     Deepseek,
     Anthropic,
     Ollama,
+}
+
+// Implement FromStr for Provider to parse environment variable
+impl FromStr for Provider {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "deepseek" => Ok(Provider::Deepseek),
+            "anthropic" => Ok(Provider::Anthropic),
+            "ollama" => Ok(Provider::Ollama),
+            _ => Err(anyhow::anyhow!("Invalid provider: {}. Valid options are: deepseek, anthropic, ollama", s))
+        }
+    }
 }
 
 // Common message structure used across providers
@@ -88,30 +99,37 @@ impl UnifiedClient {
     pub fn new(provider: Provider) -> Result<Self> {
         let client = Client::new();
         
+
         let (api_key, base_url, model) = match provider {
             Provider::Deepseek => {
                 let key = env::var("DEEPSEEK_API_KEY")
                     .context("DEEPSEEK_API_KEY not set")?;
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_DEEPSEEK_MODEL.to_string());
                 (
                     key,
                     "https://api.deepseek.com/v1/chat/completions".to_string(),
-                    "deepseek-chat".to_string(),
+                    model,
                 )
             }
             Provider::Anthropic => {
                 let key = env::var("ANTHROPIC_API_KEY")
                     .context("ANTHROPIC_API_KEY not set")?;
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_ANTHROPIC_MODEL.to_string());
                 (
                     key,
                     "https://api.anthropic.com/v1/messages".to_string(),
-                    "claude-3-sonnet-20240229".to_string(),
+                    model,
                 )
             }
             Provider::Ollama => {
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_OLLAMA_MODEL.to_string());
                 (
                     String::new(), // No API key needed for local Ollama
                     "http://localhost:11434/api/generate".to_string(),
-                    "deepseek-r1:8b".to_string(), // Default model, can be made configurable
+                    model,
                 )
             }
         };
@@ -336,11 +354,16 @@ pub async fn get_summaries(
     prompt_template: String,
     suffix_map: HashMap<&'static str, (&'static str, &'static str)>
 ) -> Result<Vec<String>> {
-    let provider = Provider::Anthropic;
+    // Get provider from environment variable, default to Ollama if not set
+    let provider = env::var("DIRSCRIBE_PROVIDER")
+        .map(|p| Provider::from_str(&p))
+        .unwrap_or(Ok(Provider::Ollama))?;
+
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     let suffix_map = Arc::new(suffix_map);
     
+    // Rest of the function remains the same
     let mut handles = Vec::new();
     
     for file_path in valid_files {
@@ -396,7 +419,6 @@ pub async fn get_summaries(
     }
     Ok(results)
 }
-
 
 pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
     let extension = file_path.extension()

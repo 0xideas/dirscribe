@@ -1,10 +1,3 @@
-/*
-[DIRSCRIBE]
-Runs dirscribe command to generate output and compares it with ground truth. Tests for regular and diff-only modes.
-Defined: setup,test_dirscribe_output_matches_ground_truth,test_dirscribe_diff_only_output_matches_ground_truth,INIT
-Used: std::process::Command,std::fs,similar::ChangeTag,similar::TextDiff,std::sync::Once
-[/DIRSCRIBE]
-*/
 use std::process::Command;
 use std::fs;
 use similar::{ChangeTag, TextDiff};

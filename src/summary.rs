@@ -287,9 +287,13 @@ impl UnifiedClient {
 
             if response.status().is_success() {
                 let response_text = response.text().await?;
-                let response = self.parse_response(response_text).await
-                if check_summary(file_path, response, suffix_map) {
-                    return response;
+                let response = self.parse_response(response_text).await?;
+                match response {
+                    Some { UnifiedResponse { content, total_tokens } } => {
+                        if check_summary(Path::new(&file_path), &content, suffix_map) {
+                            return Some(UnifiedResponse(content, total_tokens));
+                        }
+                    }
                 }
             }
 
@@ -317,7 +321,7 @@ pub async fn get_summaries(
     prompt_template: String,
     suffix_map: HashMap<&'static str, (&'static str, &'static str)>
 ) -> Result<Vec<String>> {
-    let provider = Provider::Ollama;
+    let provider = Provider::Anthropic;
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
     

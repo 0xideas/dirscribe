@@ -53,32 +53,6 @@ trait ProviderRequest {
     fn build_request(&self, messages: Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> serde_json::Value;
 }
 
-// Provider-specific request structures
-#[derive(Debug, Serialize)]
-struct DeepseekRequest {
-    model: String,
-    messages: Vec<Message>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    stream: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-struct AnthropicRequest {
-    model: String,
-    messages: Vec<Message>,
-    max_tokens: Option<i32>,
-    temperature: Option<f32>,
-}
-
-#[derive(Debug, Serialize)]
-struct OllamaRequest {
-    model: String,
-    prompt: String,
-    stream: bool,
-}
-
-
 
 // Unified response structure
 #[derive(Debug)]

@@ -5,6 +5,7 @@ use anyhow::Context;
 use ignore::WalkBuilder;
 use std::collections::HashMap;
 use git2::{Repository, Tree};
+use chrono::Local;
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
 use crate::summary::{get_summaries, check_summary};
 
@@ -294,11 +295,20 @@ pub fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     filtered_lines.join("\n")
 }
 
+
+fn insert_timestamp(input: &str) -> String {
+    let mut lines: Vec<&str> = input.lines().collect();
+    let timestamp = Local::now().to_rfc3339();
+    lines.insert(lines.len() - 2, &timestamp);
+    lines.join("\n")
+}
+
 pub fn write_summary_to_file(file_path: &Path, summary: &str, suffix_map: HashMap<&'static str, (&'static str, &'static str)>) -> anyhow::Result<()> {
     if check_summary(file_path, summary, &suffix_map) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;    
         let processed_content = filter_dirscribe_sections(&content, true);
-        let summary_block = format!("{}\n", summary);
+        let summary_ts = insert_timestamp(summary);
+        let summary_block = format!("{}\n", summary_ts);
         let new_content = summary_block + &processed_content;
         fs::write(file_path, new_content)?;
         Ok(())

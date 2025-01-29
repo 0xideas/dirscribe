@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::str::FromStr;
 use crate::file_processing::filter_dirscribe_sections;
 
-const MAX_CONCURRENT_REQUESTS: usize = 1;
+const DEFAULT_CONCURRENT_REQUESTS: usize = 10;
 const ANTHROPIC_MAX_TOKENS: i32 = 512;
 const ANTHROPIC_TEMPERATURE: f32 = 0.1;
 const MAX_RETRIES: u32 = 6;
@@ -329,7 +329,9 @@ pub async fn get_summaries(
         .unwrap_or(Ok(Provider::Ollama))?;
 
     let client = Arc::new(UnifiedClient::new(provider)?);
-    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
+    let max_concurrent_requests: usize =  env::var("DIRSCRIBE_CONCURRENT_REQUESTS").unwrap_or_else(|_| DEFAULT_CONCURRENT_REQUESTS.to_string()).parse().unwrap_or(DEFAULT_CONCURRENT_REQUESTS);
+
+    let semaphore = Arc::new(Semaphore::new(max_concurrent_requests));
     let suffix_map = Arc::new(suffix_map);
     
     // Rest of the function remains the same

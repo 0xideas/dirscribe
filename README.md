@@ -84,6 +84,8 @@ For each non-local provider, `PROVIDER_API_KEY` needs to be set.
 
 The model used can be specified using `DIRSCRIBE_MODEL`.
 
+The number of concurrent requests used can be set using `DIRSCRIBE_CONCURRENT_REQUESTS`.
+
 ### Example with Prompt Template
 
 ```bash

@@ -20,13 +20,16 @@ A CLI tool that collects and combines files with specific extensions from a dire
 
 ## Features and Options
 
-- Recursive traverse directory and filter by file extension
-- Apply .gitignore 
+- Recursively traverse directory and filter by file extension
+- Automatically applies .gitignore 
 - Configure subpaths to include or exclude
 - Filter by positive and/or negative keyword filters
 - Only output diff, between commit ids or from a specified commit id to the current state
 - Embed output in prompt template
 - Write output to file
+- Create summaries of file contents using LLM APIs
+- Save summaries as comments on top of files
+- Retrieve summaries from files with summaries added to them
 
 ## Installation
 
@@ -55,6 +58,7 @@ dirscribe "*"
 
 ### Options
 
+#### 'Deterministic' Processing options
 - `--exclude-paths`: Comma-separated paths to exclude
 - `--include-paths`: Comma-separated paths to include
 - `--or-keywords`: Only include files containing at least one of these keywords
@@ -67,6 +71,11 @@ dirscribe "*"
 - `--output-path`: Path where the output file should be written. If not provided, output will be copied to clipboard
 - `--dont-use-gitignore`: include files covered by .gitignore
 
+#### LLM based options
+- `--summarize`: Pass either file content or file diffs to LLM for summarization
+- `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
+- `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point
+
 ### Example with Diff Only
 
 ```bash
@@ -78,6 +87,18 @@ dirscribe rs,md \
 ```
 
 This will only process files that changed between commits abc123 and def456.
+
+### Example with Summarize
+
+```bash
+dirscribe rs,md --summarize --apply
+```
+
+This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek` or `ollama`.
+
+For each non-local provider, `PROVIDER_API_KEY` needs to be set.
+
+The model used can be specified using `DIRSCRIBE_MODEL`.
 
 ### Example with Prompt Template
 
@@ -223,14 +244,29 @@ pub fn get_diff_list(
 
 pub fn get_diff_str(diff: &Diff) -> io::Result<String> {
     let mut diff_output = Vec::new();
+    
     diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
-        if let Ok(content) = std::str::from_utf8(line.content()) {
-            diff_output.extend_from_slice(content.as_bytes());
+        let origin = line.origin();
+        
+        // For header lines (not +, -, or space), just add the content
+        if origin != '+' && origin != '-' && origin != ' ' {
+            diff_output.extend_from_slice(line.content());
+        } else {
+            // For actual diff lines, add the origin character and content
+            diff_output.push(origin as u8);
+            diff_output.extend_from_slice(line.content());
         }
         true
     }).map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
 
-    String::from_utf8(diff_output).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    let output = String::from_utf8(diff_output)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    
+    if output.is_empty() {
+        return Ok("No changes detected".to_string());
+    }
+    
+    Ok(output)
 }
 
 pub fn filter_diff_for_file(diff_str: &str, file_path: &Path) -> String {
@@ -328,13 +364,22 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         return Err(ValidationError("--apply can only be used with --summarize".into()).into());
     }
 
+    if cli.retrieve && !cli.summarize {
+        return Err(ValidationError("--retrieve can only be used with --summarize".into()).into());
+    }
+
     if cli.apply && cli.diff_only {
         return Err(ValidationError("--apply cannot be used with --diff-only".into()).into());
+    }
+
+    if cli.diff_only && cli.retrieve {
+        return Err(ValidationError("--retrieve is not available with --diff-only".into()).into());
     }
 
     if cli.apply && cli.retrieve {
         return Err(ValidationError("--apply and --retrieve cannot be used together".into()).into());
     }
+
 
     Ok(())
 }
@@ -710,21 +755,18 @@ async fn main() -> Result<()> {
 
 
 
-
-
-
-
 File Content of ./src/file_processing.rs:
 
 use std::fs;
 use std::io::{self, Write, Cursor};
-use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use anyhow::Context;
 use ignore::WalkBuilder;
 use std::collections::HashMap;
 use git2::{Repository, Tree};
+use chrono::Local;
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
-use crate::summary::get_summaries;
+use crate::summary::{get_summaries, check_summary};
 
 
 pub async fn process_directory(
@@ -879,26 +921,26 @@ pub async fn process_directory(
             .collect();
         
 
+        let suffix_map = create_comment_map();
+
         let summaries = if !diff_only {
             if !retrieve {
-                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone()).await?
+                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone(), diff_only).await?
             } else {
                 get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
             }
         } else {
-            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone(), suffix_map.clone(), diff_only).await?
         };
         
         if apply && !diff_only {
             // Zip together the files and their summaries
             for (file_path, summary) in valid_files.iter().zip(summaries.iter()) {
-                if let Err(e) = write_summary_to_file(file_path, summary) {
+                if let Err(e) = write_summary_to_file(file_path, summary, suffix_map.clone()) {
                     eprintln!("Error writing summary to {}: {}", file_path.display(), e);
                 }
             }
             
-            // Add a message to the output indicating files were modified
-            write!(output, "\nSummaries have been written to the top of {} files.\n", valid_files.len())?;
         }
     
         // Use the original valid_files order
@@ -935,10 +977,6 @@ pub async fn process_directory(
         .map_err(Into::into)
 }
 
-fn check_summary(s: &str) -> bool {
-    s.split('\n').nth(0).map_or(true, |f| f.len() <= 4) && s.split('\n').last().map_or(true, |l| l.len() <= 4)
-}
-
 fn check_prefix(s: &str) -> bool {
     let lines: Vec<_> = s.split('\n').collect();
     if lines.is_empty() { return true; }
@@ -962,7 +1000,8 @@ fn get_summaries_from_files(
 
     summaries
 }
-fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
+
+pub fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
         return String::new();
@@ -978,7 +1017,7 @@ fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     let mut line_number = 0;
     let mut in_dirscribe = false;
     let filtered_lines: Vec<&str> = with_context
-        .filter(|(prev, current, next)| {
+        .filter(|(prev, _, next)| {
             line_number += 1;
 
             if let Some(next_line) = next {
@@ -1015,14 +1054,20 @@ fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     filtered_lines.join("\n")
 }
 
-pub fn write_summary_to_file(file_path: &Path, summary: &str) -> anyhow::Result<()> {
-    if check_summary(summary) | check_prefix(summary) {
+
+fn insert_timestamp(input: &str) -> String {
+    let mut lines: Vec<&str> = input.lines().collect();
+    let timestamp = Local::now().to_rfc3339();
+    lines.insert(lines.len() - 2, &timestamp);
+    lines.join("\n")
+}
+
+pub fn write_summary_to_file(file_path: &Path, summary: &str, suffix_map: HashMap<&'static str, (&'static str, &'static str)>) -> anyhow::Result<()> {
+    if check_summary(file_path, summary, &suffix_map) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;    
-        println!("content: {}", content); 
         let processed_content = filter_dirscribe_sections(&content, true);
-        println!("processed_content: {}", processed_content); 
-        let summary_block = format!("{}\n", summary);
-        println!("summary_block: {}", summary_block); 
+        let summary_ts = insert_timestamp(summary);
+        let summary_block = format!("{}\n", summary_ts);
         let new_content = summary_block + &processed_content;
         fs::write(file_path, new_content)?;
         Ok(())
@@ -1196,6 +1241,271 @@ fn is_likely_text_file(path: &Path) -> bool {
     false
 }
 
+
+
+fn create_comment_map() -> HashMap<&'static str, (&'static str, &'static str)> {
+    let mut map = HashMap::new();
+    
+    // Existing mappings
+    // ActionScript
+    map.insert("as", ("/*", "*/"));
+    
+    // Ada
+    map.insert("ada", ("/*", "*/"));
+    map.insert("adb", ("/*", "*/"));
+    map.insert("ads", ("/*", "*/"));
+    
+    // AppleScript
+    map.insert("scpt", ("(*", "*)"));
+    map.insert("applescript", ("(*", "*)"));
+    
+    // Assembly
+    map.insert("asm", ("/*", "*/"));
+    map.insert("s", ("/*", "*/"));
+    
+    // AWK
+    map.insert("awk", ("/*", "*/"));
+    
+    // Bash
+    map.insert("sh", (":'", "'"));
+    map.insert("bash", (":'", "'"));
+    
+    // C
+    map.insert("c", ("/*", "*/"));
+    map.insert("h", ("/*", "*/"));
+    
+    // C#
+    map.insert("cs", ("/*", "*/"));
+    
+    // C++
+    map.insert("cpp", ("/*", "*/"));
+    map.insert("hpp", ("/*", "*/"));
+    map.insert("cc", ("/*", "*/"));
+    map.insert("hh", ("/*", "*/"));
+    map.insert("cxx", ("/*", "*/"));
+    map.insert("hxx", ("/*", "*/"));
+    
+    // COBOL
+    map.insert("cob", ("/*", "*/"));
+    map.insert("cbl", ("/*", "*/"));
+    
+    // CoffeeScript
+    map.insert("coffee", ("###", "###"));
+    
+    // CSS
+    map.insert("css", ("/*", "*/"));
+    
+    // D
+    map.insert("d", ("/*", "*/"));
+    
+    // Dart
+    map.insert("dart", ("/*", "*/"));
+    
+    // Delphi
+    map.insert("pas", ("{", "}"));
+    map.insert("dpr", ("{", "}"));
+    
+    // Elixir
+    map.insert("ex", ("#=", "=#"));
+    map.insert("exs", ("#=", "=#"));
+    
+    // Erlang
+    map.insert("erl", ("%%%", "%%%"));
+    map.insert("hrl", ("%%%", "%%%"));
+    
+    // F#
+    map.insert("fs", ("(*", "*)"));
+    map.insert("fsx", ("(*", "*)"));
+    
+    // Go
+    map.insert("go", ("/*", "*/"));
+    
+    // Groovy
+    map.insert("groovy", ("/*", "*/"));
+    map.insert("gvy", ("/*", "*/"));
+    
+    // Haskell
+    map.insert("hs", ("{-", "-}"));
+    map.insert("lhs", ("{-", "-}"));
+    
+    // HTML
+    map.insert("html", ("<!--", "-->"));
+    map.insert("htm", ("<!--", "-->"));
+    
+    // Java
+    map.insert("java", ("/*", "*/"));
+    
+    // JavaScript
+    map.insert("js", ("/*", "*/"));
+    map.insert("mjs", ("/*", "*/"));
+    
+    // Julia
+    map.insert("jl", ("#=", "=#"));
+    
+    // Kotlin
+    map.insert("kt", ("/*", "*/"));
+    map.insert("kts", ("/*", "*/"));
+    
+    // LISP
+    map.insert("lisp", ("#|", "|#"));
+    map.insert("lsp", ("#|", "|#"));
+    map.insert("cl", ("#|", "|#"));
+    
+    // Lua
+    map.insert("lua", ("--[[", "]]"));
+    
+    // MATLAB
+    map.insert("m", ("%{", "%}"));
+    map.insert("mat", ("%{", "%}"));
+    
+    // OCaml
+    map.insert("ml", ("(*", "*)"));
+    map.insert("mli", ("(*", "*)"));
+    
+    // Pascal
+    map.insert("pas", ("{", "}"));
+    map.insert("pp", ("{", "}"));
+    
+    // Perl
+    map.insert("pl", ("=pod", "=cut"));
+    map.insert("pm", ("=pod", "=cut"));
+    
+    // PHP
+    map.insert("php", ("/*", "*/"));
+    
+    // PowerShell
+    map.insert("ps1", ("<#", "#>"));
+    map.insert("psm1", ("<#", "#>"));
+    map.insert("psd1", ("<#", "#>"));
+    
+    // Python
+    map.insert("py", ("'''", "'''"));
+    map.insert("pyw", ("'''", "'''"));
+    
+    // R
+    map.insert("r", ("/*", "*/"));
+    map.insert("R", ("/*", "*/"));
+    
+    // Ruby
+    map.insert("rb", ("=begin", "=end"));
+    map.insert("rbw", ("=begin", "=end"));
+    
+    // Rust
+    map.insert("rs", ("/*", "*/"));
+    
+    // Scala
+    map.insert("scala", ("/*", "*/"));
+    map.insert("sc", ("/*", "*/"));
+    
+    // SQL
+    map.insert("sql", ("/*", "*/"));
+    
+    // Swift
+    map.insert("swift", ("/*", "*/"));
+    
+    // TypeScript
+    map.insert("ts", ("/*", "*/"));
+    map.insert("tsx", ("/*", "*/"));
+    
+    // VB.NET
+    map.insert("vb", ("'''", "'''"));
+    
+    // XML
+    map.insert("xml", ("<!--", "-->"));
+    map.insert("xsl", ("<!--", "-->"));
+    map.insert("xsd", ("<!--", "-->"));
+    
+    // YAML
+    map.insert("yml", ("'''", "'''"));
+    map.insert("yaml", ("'''", "'''"));
+    
+    // New mappings
+    // HCL (Terraform)
+    map.insert("tf", ("/*", "*/"));
+    map.insert("tfvars", ("#", "single line"));
+    map.insert("hcl", ("/*", "*/"));
+    
+    // TOML
+    map.insert("toml", ("#", "single line"));
+    
+    // Kubernetes YAML
+    map.insert("yaml", ("#", "single line"));
+    map.insert("yml", ("#", "single line"));
+    
+    // Dockerfile
+    map.insert("dockerfile", ("#", "single line"));
+    map.insert("containerfile", ("#", "single line"));
+    
+    // Nginx config
+    map.insert("nginx", ("#", "single line"));
+    map.insert("conf", ("#", "single line"));
+    
+    // Apache config
+    map.insert("htaccess", ("#", "single line"));
+    map.insert("apache2.conf", ("#", "single line"));
+    map.insert("httpd.conf", ("#", "single line"));
+    
+    // INI
+    map.insert("ini", (";", "single line"));
+    map.insert("cfg", (";", "single line"));
+    map.insert("conf", (";", "single line"));
+    
+    // Properties files
+    map.insert("properties", ("#", "single line"));
+    map.insert("prop", ("#", "single line"));
+    
+    // Ansible YAML
+    map.insert("ansible", ("#", "single line"));
+    map.insert("yml", ("#", "single line"));
+    
+    // CloudFormation
+    map.insert("template", ("#", "single line"));
+    map.insert("cf.json", ("//", "single line"));
+    map.insert("cf.yaml", ("#", "single line"));
+    map.insert("cf.yml", ("#", "single line"));
+    
+    // ARM templates (Azure)
+    map.insert("json", ("//", "single line"));
+    map.insert("arm.json", ("//", "single line"));
+    
+    // Puppet
+    map.insert("pp", ("/*", "*/"));
+    map.insert("puppet", ("#", "single line"));
+    
+    // Chef
+    map.insert("rb", ("#", "single line"));
+    map.insert("chef", ("#", "single line"));
+    
+    // Salt
+    map.insert("sls", ("#", "single line"));
+    map.insert("salt", ("#", "single line"));
+    
+    // Bicep (Azure)
+    map.insert("bicep", ("/*", "*/"));
+    
+    // Jsonnet
+    map.insert("jsonnet", ("/*", "*/"));
+    map.insert("libsonnet", ("/*", "*/"));
+    
+    // Groovy (Jenkins Pipeline)
+    map.insert("jenkinsfile", ("/*", "*/"));
+    map.insert("Jenkinsfile", ("/*", "*/"));
+    
+    // CircleCI config
+    map.insert("circleci", ("#", "single line"));
+    map.insert(".circleci", ("#", "single line"));
+    
+    // GitHub Actions YAML
+    map.insert("workflow", ("#", "single line"));
+    map.insert("github-action", ("#", "single line"));
+    
+    // Docker Compose
+    map.insert("docker-compose.yml", ("#", "single line"));
+    map.insert("docker-compose.yaml", ("#", "single line"));
+    
+    map
+}
+
 File Content of ./src/cli.rs:
 
 use clap::Parser;
@@ -1268,23 +1578,44 @@ File Content of ./src/summary.rs:
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
-use anyhow::Result;
+use anyhow::{Result, Context};
 use std::env;
+use std::path::Path;
 use std::collections::HashMap;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
-use anyhow::Context;
+use std::str::FromStr;
+use crate::file_processing::filter_dirscribe_sections;
 
 const MAX_CONCURRENT_REQUESTS: usize = 1;
-const ANTHROPIC_MAX_TOKENS: i32 = 300;
+const ANTHROPIC_MAX_TOKENS: i32 = 512;
 const ANTHROPIC_TEMPERATURE: f32 = 0.1;
 const MAX_RETRIES: u32 = 6;
 const INITIAL_BACKOFF_MS: u64 = 1000;
+
+const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-chat";
+const DEFAULT_ANTHROPIC_MODEL: &str = "claude-3-sonnet-20240229";
+const DEFAULT_OLLAMA_MODEL: &str = "deepseek-r1:8b";
 
 #[derive(Debug, Clone, Copy)]
 pub enum Provider {
     Deepseek,
     Anthropic,
+    Ollama,
+}
+
+// Implement FromStr for Provider to parse environment variable
+impl FromStr for Provider {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "deepseek" => Ok(Provider::Deepseek),
+            "anthropic" => Ok(Provider::Anthropic),
+            "ollama" => Ok(Provider::Ollama),
+            _ => Err(anyhow::anyhow!("Invalid provider: {}. Valid options are: deepseek, anthropic, ollama", s))
+        }
+    }
 }
 
 // Common message structure used across providers
@@ -1294,34 +1625,10 @@ pub struct Message {
     pub content: String,
 }
 
-// Trait for provider-specific request structures
-trait ProviderRequest {
-    fn build_request(&self, messages: Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> serde_json::Value;
-}
-
-// Provider-specific request structures
-#[derive(Debug, Serialize)]
-struct DeepseekRequest {
-    model: String,
-    messages: Vec<Message>,
-    temperature: Option<f32>,
-    max_tokens: Option<i32>,
-    stream: Option<bool>,
-}
-
-#[derive(Debug, Serialize)]
-struct AnthropicRequest {
-    model: String,
-    messages: Vec<Message>,
-    max_tokens: Option<i32>,
-    temperature: Option<f32>,
-}
-
 // Unified response structure
 #[derive(Debug)]
 pub struct UnifiedResponse {
     pub content: String,
-    pub total_tokens: i32,
 }
 
 pub struct UnifiedClient {
@@ -1336,23 +1643,37 @@ impl UnifiedClient {
     pub fn new(provider: Provider) -> Result<Self> {
         let client = Client::new();
         
+
         let (api_key, base_url, model) = match provider {
             Provider::Deepseek => {
-                let key = env::var("DEEPSEEK_API_KEY")
-                    .context("DEEPSEEK_API_KEY not set")?;
+                let key = env::var("PROVIDER_API_KEY")
+                    .context("PROVIDER_API_KEY not set")?;
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_DEEPSEEK_MODEL.to_string());
                 (
                     key,
                     "https://api.deepseek.com/v1/chat/completions".to_string(),
-                    "deepseek-chat".to_string(),
+                    model,
                 )
             }
             Provider::Anthropic => {
-                let key = env::var("ANTHROPIC_API_KEY")
-                    .context("ANTHROPIC_API_KEY not set")?;
+                let key = env::var("PROVIDER_API_KEY")
+                    .context("PROVIDER_API_KEY not set")?;
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_ANTHROPIC_MODEL.to_string());
                 (
                     key,
                     "https://api.anthropic.com/v1/messages".to_string(),
-                    "claude-3-sonnet-20240229".to_string(),
+                    model,
+                )
+            }
+            Provider::Ollama => {
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_OLLAMA_MODEL.to_string());
+                (
+                    String::new(), // No API key needed for local Ollama
+                    "http://localhost:11434/api/generate".to_string(),
+                    model,
                 )
             }
         };
@@ -1386,6 +1707,7 @@ impl UnifiedClient {
                     "2023-06-01".parse().unwrap(),
                 );
             }
+            Provider::Ollama => {}
         }
         
         headers.insert(
@@ -1415,6 +1737,19 @@ impl UnifiedClient {
                     "temperature": ANTHROPIC_TEMPERATURE
                 })
             }
+            Provider::Ollama => {
+                // For Ollama, we'll concatenate all messages into a single prompt
+                let prompt = messages.iter()
+                    .map(|m| format!("{}: {}", m.role, m.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                
+                serde_json::json!({
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": false
+                })
+            }
         }
     }
 
@@ -1424,6 +1759,7 @@ impl UnifiedClient {
                 #[derive(Debug, Deserialize)]
                 struct DeepseekResponse {
                     choices: Vec<DeepseekChoice>,
+                    #[allow(dead_code)]
                     usage: DeepseekUsage,
                 }
                 
@@ -1433,32 +1769,35 @@ impl UnifiedClient {
                 }
                 
                 #[derive(Debug, Deserialize)]
+                #[allow(dead_code)]
                 struct DeepseekUsage {
                     total_tokens: i32,
                 }
 
                 let response: DeepseekResponse = serde_json::from_str(&response_text)?;
                 Ok(UnifiedResponse {
-                    content: response.choices[0].message.content.clone(),
-                    total_tokens: response.usage.total_tokens,
+                    content: response.choices[0].message.content.clone()
                 })
             }
             Provider::Anthropic => {
                 #[derive(Debug, Deserialize)]
                 struct AnthropicResponse {
                     content: Vec<AnthropicContent>,
+                    #[allow(dead_code)]
                     usage: AnthropicUsage,
                 }
                 
                 #[derive(Debug, Deserialize)]
                 struct AnthropicContent {
                     #[serde(rename = "type")]
+                    #[allow(dead_code)]
                     content_type: String,
                     #[serde(rename = "text")]
                     message: String,
                 }
                 
                 #[derive(Debug, Deserialize)]
+                #[allow(dead_code)]
                 struct AnthropicUsage {
                     input_tokens: i32,
                     output_tokens: i32,
@@ -1466,20 +1805,42 @@ impl UnifiedClient {
 
                 let response: AnthropicResponse = serde_json::from_str(&response_text)?;
                 Ok(UnifiedResponse {
-                    content: response.content[0].message.clone(),
-                    total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+                    content: response.content[0].message.clone()
+                })
+            }
+            Provider::Ollama => {
+                #[derive(Debug, Deserialize)]
+                struct OllamaResponse {
+                    response: String,
+                    #[allow(dead_code)]
+                    done: bool,
+                }
+                let response: OllamaResponse = serde_json::from_str(&response_text)?;
+                let content = if response.response.contains("</think>") {
+                    response.response
+                        .split("</think>")
+                        .nth(1)
+                        .unwrap_or(&response.response)
+                        .trim()
+                        .to_string()
+                } else {
+                    response.response.clone()
+                };
+                
+                Ok(UnifiedResponse {
+                    content
                 })
             }
         }
     }
 
-    pub async fn chat(&self, file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
+    pub async fn chat(&self, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>, diff_only: bool,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
         let request = self.build_request(messages.clone(), temperature, max_tokens);
         let headers = self.build_headers()?;
         
         let mut retries = 0;
         let mut backoff_ms = INITIAL_BACKOFF_MS;
-
+    
         loop {
             let response = self.client
                 .post(&self.base_url)
@@ -1487,24 +1848,44 @@ impl UnifiedClient {
                 .json(&request)
                 .send()
                 .await?;
-
-            if response.status().is_success() {
-                let response_text = response.text().await?;
-                println!("\n\nRaw API Response {}: {}", file_path, response_text);
-                return self.parse_response(response_text).await;
-            }
-
+    
             let status = response.status();
-            if !status.is_server_error() && status != 429 {
-                let error_text = response.text().await?;
-                anyhow::bail!("API request failed: {}", error_text);
+            let response_text = response.text().await?;
+            
+            // First check if the request was successful
+            if status.is_success() {
+                // Try to parse the response
+                match self.parse_response(response_text.clone()).await {
+                    Ok(parsed_response) => {
+                        // Check if the summary is valid
+                        if diff_only | check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
+                            return Ok(parsed_response);
+                        } else {
+                            // If summary validation fails, treat it like a retriable error
+                            if retries >= MAX_RETRIES {
+                                anyhow::bail!("Max retries exceeded. Could not generate valid summary format");
+                            }
+                            // Continue to retry logic
+                        }
+                    }
+                    Err(e) => {
+                        // If parsing fails and we're out of retries, bail
+                        if retries >= MAX_RETRIES {
+                            anyhow::bail!("Failed to parse response after {} retries: {}", MAX_RETRIES, e);
+                        }
+                        // Continue to retry logic
+                    }
+                }
+            } else if !status.is_server_error() && status != 429 {
+                // Only bail immediately on non-retriable errors
+                anyhow::bail!("API request failed with non-retriable error: {}", response_text);
             }
-
+    
+            // Retry logic
             if retries >= MAX_RETRIES {
-                let error_text = response.text().await?;
-                anyhow::bail!("Max retries exceeded. Last error: {}", error_text);
+                anyhow::bail!("Max retries exceeded. Last error: {} {}", status, response_text);
             }
-
+    
             sleep(Duration::from_millis(backoff_ms)).await;
             retries += 1;
             backoff_ms *= 2;
@@ -1515,21 +1896,52 @@ impl UnifiedClient {
 pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
-    prompt_template: String
+    prompt_template: String,
+    suffix_map: HashMap<&'static str, (&'static str, &'static str)>,
+    diff_only:bool
 ) -> Result<Vec<String>> {
-    let provider = Provider::Anthropic;
+    // Get provider from environment variable, default to Ollama if not set
+    let provider = env::var("DIRSCRIBE_PROVIDER")
+        .map(|p| Provider::from_str(&p))
+        .unwrap_or(Ok(Provider::Ollama))?;
+
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
+    let suffix_map = Arc::new(suffix_map);
     
+    // Rest of the function remains the same
     let mut handles = Vec::new();
     
     for file_path in valid_files {
         let permit = semaphore.clone().acquire_owned().await?;
         let content = file_contents.get(&file_path).unwrap_or(&String::new()).clone();
+        let processed_content = filter_dirscribe_sections(&content, true);
         let file_path_clone = file_path.clone();
         let client = client.clone();
-        
-        let prompt = prompt_template.replace("${${CONTENT}$}$", &content);
+        let suffix_map = Arc::clone(&suffix_map);
+        let prompt_template = prompt_template.clone();
+
+        let extension = Path::new(&file_path)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or(""); 
+
+        let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
+        let prompt = if !diff_only {
+            if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+                if multi_line_comment_end != &"single line" {
+                    prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
+                        multi_line_comment_start, multi_line_comment_end)
+                } else {
+                    prompt_base.to_owned() + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", 
+                        multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                }
+            } else {
+                prompt_base.to_owned() + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
+            }
+        } else {
+            prompt_base.to_string()
+        };
 
         let messages: Vec<Message> = vec![Message {
             role: "user".to_string(),
@@ -1537,7 +1949,7 @@ pub async fn get_summaries(
         }];
 
         let handle = tokio::spawn(async move {
-            let result = client.chat(&file_path, &messages, None, None).await;
+            let result = client.chat(&suffix_map, diff_only, &file_path_clone, &messages, None, None).await;
             drop(permit);
             match result {
                 Ok(response) => Ok(response.content),
@@ -1558,3 +1970,30 @@ pub async fn get_summaries(
     Ok(results)
 }
 
+pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
+    let extension = file_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or(""); 
+    if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+        let lines: Vec<&str> = s.trim().split('\n').collect();
+        if lines.len() < 4 {
+            return false;
+        }
+        if multi_line_comment_end != &"single line" {
+            let comment_start = lines[0].trim() == *multi_line_comment_start;
+            let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
+            let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
+            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+            comment_start && dirscribe_start && dirscribe_end && comment_end
+        } else {
+            let comment_start = lines[0].trim() == *multi_line_comment_start;
+            let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
+            let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
+            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
+            comment_start && dirscribe_start && dirscribe_end && comment_end
+        }
+
+    } else {
+        false
+    }
+}

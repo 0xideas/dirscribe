@@ -258,7 +258,7 @@ pub fn filter_dirscribe_sections(content: &str, exclude: bool) -> String {
     let mut line_number = 0;
     let mut in_dirscribe = false;
     let filtered_lines: Vec<&str> = with_context
-        .filter(|(prev, current, next)| {
+        .filter(|(prev, _, next)| {
             line_number += 1;
 
             if let Some(next_line) = next {

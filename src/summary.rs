@@ -48,17 +48,10 @@ pub struct Message {
     pub content: String,
 }
 
-// Trait for provider-specific request structures
-trait ProviderRequest {
-    fn build_request(&self, messages: Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> serde_json::Value;
-}
-
-
 // Unified response structure
 #[derive(Debug)]
 pub struct UnifiedResponse {
     pub content: String,
-    pub total_tokens: i32,
 }
 
 pub struct UnifiedClient {
@@ -189,6 +182,7 @@ impl UnifiedClient {
                 #[derive(Debug, Deserialize)]
                 struct DeepseekResponse {
                     choices: Vec<DeepseekChoice>,
+                    #[allow(dead_code)]
                     usage: DeepseekUsage,
                 }
                 
@@ -198,32 +192,35 @@ impl UnifiedClient {
                 }
                 
                 #[derive(Debug, Deserialize)]
+                #[allow(dead_code)]
                 struct DeepseekUsage {
                     total_tokens: i32,
                 }
 
                 let response: DeepseekResponse = serde_json::from_str(&response_text)?;
                 Ok(UnifiedResponse {
-                    content: response.choices[0].message.content.clone(),
-                    total_tokens: response.usage.total_tokens,
+                    content: response.choices[0].message.content.clone()
                 })
             }
             Provider::Anthropic => {
                 #[derive(Debug, Deserialize)]
                 struct AnthropicResponse {
                     content: Vec<AnthropicContent>,
+                    #[allow(dead_code)]
                     usage: AnthropicUsage,
                 }
                 
                 #[derive(Debug, Deserialize)]
                 struct AnthropicContent {
                     #[serde(rename = "type")]
+                    #[allow(dead_code)]
                     content_type: String,
                     #[serde(rename = "text")]
                     message: String,
                 }
                 
                 #[derive(Debug, Deserialize)]
+                #[allow(dead_code)]
                 struct AnthropicUsage {
                     input_tokens: i32,
                     output_tokens: i32,
@@ -231,14 +228,14 @@ impl UnifiedClient {
 
                 let response: AnthropicResponse = serde_json::from_str(&response_text)?;
                 Ok(UnifiedResponse {
-                    content: response.content[0].message.clone(),
-                    total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+                    content: response.content[0].message.clone()
                 })
             }
             Provider::Ollama => {
                 #[derive(Debug, Deserialize)]
                 struct OllamaResponse {
                     response: String,
+                    #[allow(dead_code)]
                     done: bool,
                 }
                 let response: OllamaResponse = serde_json::from_str(&response_text)?;
@@ -254,8 +251,7 @@ impl UnifiedClient {
                 };
                 
                 Ok(UnifiedResponse {
-                    content,
-                    total_tokens: 0, // Ollama doesn't provide token counts
+                    content
                 })
             }
         }

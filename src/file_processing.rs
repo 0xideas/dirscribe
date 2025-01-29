@@ -7,7 +7,6 @@ Used: std::fs,std::io,anyhow,std::path,ignore::WalkBuilder,std::collections::Has
 */
 use std::fs;
 use std::io::{self, Write, Cursor};
-use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 use std::collections::HashMap;

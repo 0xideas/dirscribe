@@ -285,19 +285,16 @@ impl UnifiedClient {
                 .send()
                 .await?;
 
-            if response.status().is_success() {
+            let status = response.status();
+
+            if status.is_success() {
                 let response_text = response.text().await?;
                 let response = self.parse_response(response_text).await?;
-                match response {
-                    Some { UnifiedResponse { content, total_tokens } } => {
-                        if check_summary(Path::new(&file_path), &content, suffix_map) {
-                            return Some(UnifiedResponse(content, total_tokens));
-                        }
-                    }
+                if check_summary(Path::new(file_path), &response.content, suffix_map) {
+                    return Ok(response);
                 }
             }
 
-            let status = response.status();
             if !status.is_server_error() && status != 429 {
                 let error_text = response.text().await?;
                 anyhow::bail!("API request failed: {}", error_text);

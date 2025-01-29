@@ -1,16 +1,18 @@
 use std::collections::HashMap;
-use std::fs;
 
-pub fn load_prompts(dir: &str) -> std::io::Result<HashMap<String, String>> {
-    Ok(fs::read_dir(dir)?
-        .filter_map(Result::ok)
-        .filter(|e| e.path().is_file())
-        .filter_map(|e| {
-            let path = e.path();
-            Some((
-                path.file_stem()?.to_str()?.to_string(),
-                fs::read_to_string(path).ok()?
-            ))
-        })
-        .collect())
+pub fn load_prompts(_dir: &str) -> std::io::Result<HashMap<String, String>> {
+    let mut prompts = HashMap::new();
+    
+    // Include prompt files at compile time
+    prompts.insert(
+        "summary-0.1".to_string(),
+        include_str!("../prompts/summary-0.1.txt").to_string()
+    );
+    
+    prompts.insert(
+        "summary-diff-0.1".to_string(),
+        include_str!("../prompts/summary-diff-0.1.txt").to_string()
+    );
+    
+    Ok(prompts)
 }

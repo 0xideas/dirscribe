@@ -1,6 +1,6 @@
 [package]
 name = "dirscribe"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2021"
 authors = ["Leon Luithlen"]
 description = "A CLI tool that combines contents of files with specific extensions from a directory"
@@ -10,7 +10,13 @@ repository = "https://github.com/0xideas/dirscribe"
 license = "MIT"
 keywords = ["cli", "files", "directory", "concatenate", "utility"]
 categories = ["command-line-utilities", "filesystem"]
-
+# Include prompts directory in the published package
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "README.md",
+    "prompts/**/*"
+]
 
 [dependencies]
 walkdir = "2.3"
@@ -34,7 +40,3 @@ similar = "2.2"
 [[bin]]
 name = "dirscribe"
 path = "src/main.rs"
-
-[build]
-# Include all files in the resources directory
-include = ["prompts/**/*"]

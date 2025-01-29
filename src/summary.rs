@@ -275,7 +275,6 @@ impl UnifiedClient {
             let status = response.status();
             let response_text = response.text().await?;
             
-            println!("retry {}", retries);
             // First check if the request was successful
             if status.is_success() {
                 // Try to parse the response
@@ -286,7 +285,6 @@ impl UnifiedClient {
                             return Ok(parsed_response);
                         } else {
                             // If summary validation fails, treat it like a retriable error
-                            println!("{}", parsed_response.content);
                             if retries >= MAX_RETRIES {
                                 anyhow::bail!("Max retries exceeded. Could not generate valid summary format");
                             }

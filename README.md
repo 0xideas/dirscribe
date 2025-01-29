@@ -55,7 +55,7 @@ dirscribe "*"
 - `--output-path`: Path where the output file should be written. If not provided, output will be copied to clipboard
 - `--dont-use-gitignore`: include files covered by .gitignore
 
-## LLM based options
+#### LLM based options
 - `--summarize`: Pass either file content or file diffs to LLM for summarization
 - `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
 - `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point

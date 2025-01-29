@@ -71,6 +71,11 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         return Err(ValidationError("--apply and --retrieve cannot be used together".into()).into());
     }
 
+    if cli.diff_only && cli.retrieve {
+        return Err(ValidationError("--retrieve is not available with --diff-only".into()).into());
+    }
+
+
     Ok(())
 }
 

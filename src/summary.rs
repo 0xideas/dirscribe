@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
 use anyhow::Result;
 use std::env;
+use std::path::Path;
 use std::collections::HashMap;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
@@ -310,7 +311,8 @@ impl UnifiedClient {
 pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
-    prompt_template: String
+    prompt_template: String,
+    suffix_map: HashMap<&'static str, (&'static str, &'static str)>
 ) -> Result<Vec<String>> {
     let provider = Provider::Ollama;
     let client = Arc::new(UnifiedClient::new(provider)?);
@@ -324,8 +326,24 @@ pub async fn get_summaries(
         let processed_content = filter_dirscribe_sections(&content, true);
         let file_path_clone = file_path.clone();
         let client = client.clone();
-        
-        let prompt = prompt_template.replace("${${CONTENT}$}$", &processed_content);
+
+        let extension = Path::new(&file_path).extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or(""); 
+
+        let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
+        let prompt = if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+            if multi_line_comment_end != &"single line" {
+                prompt_base + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', line N-1: '[/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_end)
+            } else {
+                prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', line N-1: '{} [/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+            }
+        } else {
+            prompt_base
+        };
+
+        println!("{}", prompt);
+            
 
         let messages: Vec<Message> = vec![Message {
             role: "user".to_string(),
@@ -352,4 +370,25 @@ pub async fn get_summaries(
         }
     }
     Ok(results)
+}
+
+
+pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
+    let extension = file_path.extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or(""); 
+    if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+        let lines: Vec<&str> = s.trim().split('\n').collect();
+        if lines.len() < 4 {
+            return false;
+        }
+        let comment_start = lines[0].trim() == *multi_line_comment_start;
+        let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
+        let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
+        let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+
+        comment_start && dirscribe_start && dirscribe_end && comment_end
+    } else {
+        false
+    }
 }

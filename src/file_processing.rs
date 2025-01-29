@@ -13,7 +13,7 @@ use ignore::WalkBuilder;
 use std::collections::HashMap;
 use git2::{Repository, Tree};
 use crate::git::{get_diff_list, get_diff_str, filter_diff_for_file};
-use crate::summary::get_summaries;
+use crate::summary::{get_summaries, check_summary};
 
 
 pub async fn process_directory(
@@ -168,18 +168,19 @@ pub async fn process_directory(
             .collect();
         
 
+        let suffix_map = create_comment_map();
+
         let summaries = if !diff_only {
             if !retrieve {
-                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone()).await?
+                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone()).await?
             } else {
                 get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
             }
         } else {
-            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone()).await?
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone(), suffix_map.clone()).await?
         };
         
         if apply && !diff_only {
-            let suffix_map = create_comment_map();
             // Zip together the files and their summaries
             for (file_path, summary) in valid_files.iter().zip(summaries.iter()) {
                 if let Err(e) = write_summary_to_file(file_path, summary, suffix_map.clone()) {
@@ -223,25 +224,6 @@ pub async fn process_directory(
         .map_err(Into::into)
 }
 
-fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
-    let extension = file_path.extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or(""); 
-    if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
-        let lines: Vec<&str> = s.trim().split('\n').collect();
-        if lines.len() < 4 {
-            return false;
-        }
-        let comment_start = lines[0].trim() == *multi_line_comment_start;
-        let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
-        let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
-        let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
-
-        comment_start && dirscribe_start && dirscribe_end && comment_end
-    } else {
-        false
-    }
-}
 fn check_prefix(s: &str) -> bool {
     let lines: Vec<_> = s.split('\n').collect();
     if lines.is_empty() { return true; }
@@ -499,10 +481,10 @@ fn is_likely_text_file(path: &Path) -> bool {
 
 
 
-
 fn create_comment_map() -> HashMap<&'static str, (&'static str, &'static str)> {
     let mut map = HashMap::new();
     
+    // Existing mappings
     // ActionScript
     map.insert("as", ("/*", "*/"));
     
@@ -674,6 +656,90 @@ fn create_comment_map() -> HashMap<&'static str, (&'static str, &'static str)> {
     // YAML
     map.insert("yml", ("'''", "'''"));
     map.insert("yaml", ("'''", "'''"));
+    
+    // New mappings
+    // HCL (Terraform)
+    map.insert("tf", ("/*", "*/"));
+    map.insert("tfvars", ("#", "single line"));
+    map.insert("hcl", ("/*", "*/"));
+    
+    // TOML
+    map.insert("toml", ("#", "single line"));
+    
+    // Kubernetes YAML
+    map.insert("yaml", ("#", "single line"));
+    map.insert("yml", ("#", "single line"));
+    
+    // Dockerfile
+    map.insert("dockerfile", ("#", "single line"));
+    map.insert("containerfile", ("#", "single line"));
+    
+    // Nginx config
+    map.insert("nginx", ("#", "single line"));
+    map.insert("conf", ("#", "single line"));
+    
+    // Apache config
+    map.insert("htaccess", ("#", "single line"));
+    map.insert("apache2.conf", ("#", "single line"));
+    map.insert("httpd.conf", ("#", "single line"));
+    
+    // INI
+    map.insert("ini", (";", "single line"));
+    map.insert("cfg", (";", "single line"));
+    map.insert("conf", (";", "single line"));
+    
+    // Properties files
+    map.insert("properties", ("#", "single line"));
+    map.insert("prop", ("#", "single line"));
+    
+    // Ansible YAML
+    map.insert("ansible", ("#", "single line"));
+    map.insert("yml", ("#", "single line"));
+    
+    // CloudFormation
+    map.insert("template", ("#", "single line"));
+    map.insert("cf.json", ("//", "single line"));
+    map.insert("cf.yaml", ("#", "single line"));
+    map.insert("cf.yml", ("#", "single line"));
+    
+    // ARM templates (Azure)
+    map.insert("json", ("//", "single line"));
+    map.insert("arm.json", ("//", "single line"));
+    
+    // Puppet
+    map.insert("pp", ("/*", "*/"));
+    map.insert("puppet", ("#", "single line"));
+    
+    // Chef
+    map.insert("rb", ("#", "single line"));
+    map.insert("chef", ("#", "single line"));
+    
+    // Salt
+    map.insert("sls", ("#", "single line"));
+    map.insert("salt", ("#", "single line"));
+    
+    // Bicep (Azure)
+    map.insert("bicep", ("/*", "*/"));
+    
+    // Jsonnet
+    map.insert("jsonnet", ("/*", "*/"));
+    map.insert("libsonnet", ("/*", "*/"));
+    
+    // Groovy (Jenkins Pipeline)
+    map.insert("jenkinsfile", ("/*", "*/"));
+    map.insert("Jenkinsfile", ("/*", "*/"));
+    
+    // CircleCI config
+    map.insert("circleci", ("#", "single line"));
+    map.insert(".circleci", ("#", "single line"));
+    
+    // GitHub Actions YAML
+    map.insert("workflow", ("#", "single line"));
+    map.insert("github-action", ("#", "single line"));
+    
+    // Docker Compose
+    map.insert("docker-compose.yml", ("#", "single line"));
+    map.insert("docker-compose.yaml", ("#", "single line"));
     
     map
 }

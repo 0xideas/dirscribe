@@ -339,7 +339,7 @@ pub async fn get_summaries(
                 prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', line N-1: '{} [/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
             }
         } else {
-            prompt_base
+            prompt_base + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
         };
 
         println!("{}", prompt);

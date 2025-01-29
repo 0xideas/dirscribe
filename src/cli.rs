@@ -18,6 +18,18 @@ pub struct Cli {
     #[arg(long, default_value_t = false)]
     pub dont_use_gitignore: bool,
 
+    /// Summarize file contents
+    #[arg(long, default_value_t = false)]
+    pub summarize: bool,
+
+    /// Apply summaries to code files
+    #[arg(long, default_value_t = false)]
+    pub apply: bool,
+
+    /// Retrieve summaries from code files
+    #[arg(long, default_value_t = false)]
+    pub retrieve: bool,
+
     /// Comma-separated list of paths to exclude
     #[arg(long)]
     pub exclude_paths: Option<String>,

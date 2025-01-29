@@ -3,18 +3,23 @@ mod cli;
 mod git;
 mod file_processing;
 mod output;
+mod prompt_handling;
+mod summary; 
 mod validation;
 use cli::Cli;
 use file_processing::process_directory;
 use output::{write_to_clipboard, process_with_template};
 use clap::Parser;
 use validation::validate_cli_args;
-use std::io::{self, Write};
+use anyhow::{Result, Context};
+use std::io::Write;
 use std::path::PathBuf;
+use prompt_handling::load_prompts;
 
 
 
-fn main() -> io::Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     assert!(
@@ -23,7 +28,7 @@ fn main() -> io::Result<()> {
     );
 
     if let Err(e) = validate_cli_args(&cli) {
-        eprintln!("Error: {}", e.message);
+        eprintln!("Error: {}", e);
         std::process::exit(1);
     }
 
@@ -76,11 +81,17 @@ fn main() -> io::Result<()> {
         })
         .unwrap_or_default();
 
+    // Read the file contents into a String
+    let summarize_prompt_templates = load_prompts("prompts").context("Failed to load prompt templates")?;
     // Process directory and get the content string
     let content = process_directory(
         ".",
         &suffixes,
         cli.dont_use_gitignore,
+        cli.summarize,
+        summarize_prompt_templates,
+        cli.apply,
+        cli.retrieve,
         cli.diff_only,
         &exclude_paths,
         &include_paths,
@@ -89,7 +100,7 @@ fn main() -> io::Result<()> {
         &exclude_keywords,
         cli.start_commit_id.as_deref(),
         cli.end_commit_id.as_deref()
-    )?;
+    ).await?;
 
     let final_content = if let Some(template_path) = cli.prompt_template_path {
         process_with_template(&content, &template_path)?
@@ -108,11 +119,6 @@ fn main() -> io::Result<()> {
     };
     Ok(())
 }
-
-
-
-
-
 
 
 

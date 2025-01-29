@@ -76,7 +76,7 @@ fn test_dirscribe_diff_only_output_matches_ground_truth() {
         .args([
             "rs,md",
             "--exclude-paths=tests",
-            "--output-path=tests/output/dirscribe-output.txt",
+            "--output-path=tests/output/dirscribe-output-diff.txt",
             "--diff-only",
             "--start-commit-id=1420e8e8126bab612a55f45c40ece45fa3389581",
             "--end-commit-id=d7f174db9aa03359d33b7a8e1b18944b88b74f35"
@@ -87,7 +87,7 @@ fn test_dirscribe_diff_only_output_matches_ground_truth() {
     assert!(output.status.success(), "dirscribe command failed");
 
     // Read and compare output with ground truth
-    let output_content = fs::read_to_string("tests/output/dirscribe-output.txt")
+    let output_content = fs::read_to_string("tests/output/dirscribe-output-diff.txt")
         .expect("Failed to read output file");
     let ground_truth = fs::read_to_string("tests/data/ground-truth-diff.txt")
         .expect("Failed to read ground truth file");

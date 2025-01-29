@@ -1,26 +1,34 @@
 use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 use git2::Repository;
+use anyhow::Result;
+use std::error::Error;
+use std::fmt;
 
 #[derive(Debug)]
-pub struct ValidationError {
-    pub message: String,
+pub struct ValidationError(String);
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
+
+impl Error for ValidationError {}
 
 impl From<String> for ValidationError {
-    fn from(message: String) -> Self {
-        ValidationError { message }
+    fn from(msg: String) -> Self {
+        ValidationError(msg)
     }
 }
 
-// Add implementation for &str
 impl From<&str> for ValidationError {
-    fn from(message: &str) -> Self {
-        ValidationError { message: message.to_string() }
+    fn from(msg: &str) -> Self {
+        ValidationError(msg.to_string())
     }
 }
 
-pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
+pub fn validate_cli_args(cli: &Cli) -> Result<()> {
     // Validate suffixes
     validate_suffixes(&cli.suffixes)?;
 
@@ -51,12 +59,33 @@ pub fn validate_cli_args(cli: &Cli) -> Result<(), ValidationError> {
         &cli.include_paths,
     )?;
 
+    if cli.apply && !cli.summarize {
+        return Err(ValidationError("--apply can only be used with --summarize".into()).into());
+    }
+
+    if cli.retrieve && !cli.summarize {
+        return Err(ValidationError("--retrieve can only be used with --summarize".into()).into());
+    }
+
+    if cli.apply && cli.diff_only {
+        return Err(ValidationError("--apply cannot be used with --diff-only".into()).into());
+    }
+
+    if cli.diff_only && cli.retrieve {
+        return Err(ValidationError("--retrieve is not available with --diff-only".into()).into());
+    }
+
+    if cli.apply && cli.retrieve {
+        return Err(ValidationError("--apply and --retrieve cannot be used together".into()).into());
+    }
+
+
     Ok(())
 }
 
 fn validate_suffixes(suffixes: &str) -> Result<(), ValidationError> {
     if suffixes.is_empty() {
-        return Err("Suffixes cannot be empty".into());
+        return Err(ValidationError("Suffixes cannot be empty".to_string()));
     }
 
     if suffixes == "*" {

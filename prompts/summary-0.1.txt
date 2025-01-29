@@ -1,0 +1,13 @@
+Please analyze the provided code file and generate concise, information-dense summary of the different core functionalities that
+it performs. After that, list all classes, methods, functions, global variables, env variables or config values that are defined or used, in separate rows.
+Reduce the number of characters used to a minimum, while making sure that these lists are complete. This is very important.
+Format your response so that it can be used directly as an inline comment for the programming or config language used. DO NOT INCLUDE ANYTHING ELSE!
+
+The summary should follow this structure:
+[Consise, dense summary of core functionality]
+Defined: [List of  classes, methods, functions, global variables, env variables or config values that are defined in the file in one line]
+Used: [List of  classes, methods, functions, global variables, env variables or config values that are called or used in the file in one line]
+
+Make sure to only return the summary, and nothing else!
+
+${${CONTENT}$}$

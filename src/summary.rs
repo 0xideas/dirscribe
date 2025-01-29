@@ -257,7 +257,7 @@ impl UnifiedClient {
         }
     }
 
-    pub async fn chat(&self, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
+    pub async fn chat(&self, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>, diff_only: bool,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
         let request = self.build_request(messages.clone(), temperature, max_tokens);
         let headers = self.build_headers()?;
         
@@ -281,7 +281,7 @@ impl UnifiedClient {
                 match self.parse_response(response_text.clone()).await {
                     Ok(parsed_response) => {
                         // Check if the summary is valid
-                        if check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
+                        if diff_only | check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
                             return Ok(parsed_response);
                         } else {
                             // If summary validation fails, treat it like a retriable error
@@ -320,7 +320,8 @@ pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
     prompt_template: String,
-    suffix_map: HashMap<&'static str, (&'static str, &'static str)>
+    suffix_map: HashMap<&'static str, (&'static str, &'static str)>,
+    diff_only:bool
 ) -> Result<Vec<String>> {
     // Get provider from environment variable, default to Ollama if not set
     let provider = env::var("DIRSCRIBE_PROVIDER")
@@ -349,16 +350,20 @@ pub async fn get_summaries(
             .unwrap_or(""); 
 
         let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
-        let prompt = if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
-            if multi_line_comment_end != &"single line" {
-                prompt_base + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
-                    multi_line_comment_start, multi_line_comment_end)
+        let prompt = if !diff_only {
+            if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+                if multi_line_comment_end != &"single line" {
+                    prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
+                        multi_line_comment_start, multi_line_comment_end)
+                } else {
+                    prompt_base.to_owned() + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", 
+                        multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                }
             } else {
-                prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", 
-                    multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                prompt_base.to_owned() + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
             }
         } else {
-            prompt_base + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
+            prompt_base.to_string()
         };
 
         let messages: Vec<Message> = vec![Message {
@@ -367,7 +372,7 @@ pub async fn get_summaries(
         }];
 
         let handle = tokio::spawn(async move {
-            let result = client.chat(&suffix_map, &file_path_clone, &messages, None, None).await;
+            let result = client.chat(&suffix_map, diff_only, &file_path_clone, &messages, None, None).await;
             drop(permit);
             match result {
                 Ok(response) => Ok(response.content),

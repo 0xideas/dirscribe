@@ -166,12 +166,12 @@ pub async fn process_directory(
 
         let summaries = if !diff_only {
             if !retrieve {
-                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone()).await?
+                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone(), diff_only).await?
             } else {
                 get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
             }
         } else {
-            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone(), suffix_map.clone()).await?
+            get_summaries(valid_file_strings, file_contents.clone(), summarize_prompt_templates["summary-diff-0.1"].clone(), suffix_map.clone(), diff_only).await?
         };
         
         if apply && !diff_only {

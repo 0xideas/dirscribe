@@ -91,14 +91,29 @@ pub fn get_diff_list(
 
 pub fn get_diff_str(diff: &Diff) -> io::Result<String> {
     let mut diff_output = Vec::new();
+    
     diff.print(DiffFormat::Patch, |_delta, _hunk, line| {
-        if let Ok(content) = std::str::from_utf8(line.content()) {
-            diff_output.extend_from_slice(content.as_bytes());
+        let origin = line.origin();
+        
+        // For header lines (not +, -, or space), just add the content
+        if origin != '+' && origin != '-' && origin != ' ' {
+            diff_output.extend_from_slice(line.content());
+        } else {
+            // For actual diff lines, add the origin character and content
+            diff_output.push(origin as u8);
+            diff_output.extend_from_slice(line.content());
         }
         true
     }).map_err(|e| io::Error::new(io::ErrorKind::Other, e.message().to_string()))?;
 
-    String::from_utf8(diff_output).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    let output = String::from_utf8(diff_output)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    
+    if output.is_empty() {
+        return Ok("No changes detected".to_string());
+    }
+    
+    Ok(output)
 }
 
 pub fn filter_diff_for_file(diff_str: &str, file_path: &Path) -> String {

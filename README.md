@@ -42,7 +42,7 @@ dirscribe "*"
 
 ### Options
 
-## 'Deterministic' Processing options
+#### 'Deterministic' Processing options
 - `--exclude-paths`: Comma-separated paths to exclude
 - `--include-paths`: Comma-separated paths to include
 - `--or-keywords`: Only include files containing at least one of these keywords

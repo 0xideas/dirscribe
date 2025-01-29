@@ -275,7 +275,7 @@ impl UnifiedClient {
         
         let mut retries = 0;
         let mut backoff_ms = INITIAL_BACKOFF_MS;
-
+    
         loop {
             let response = self.client
                 .post(&self.base_url)
@@ -283,30 +283,53 @@ impl UnifiedClient {
                 .json(&request)
                 .send()
                 .await?;
-
+    
             let status = response.status();
             let response_text = response.text().await?;
-
+            
+            println!("retry {}", retries);
+            // First check if the request was successful
             if status.is_success() {
-                let response = self.parse_response(response_text.clone()).await?;
-                if check_summary(Path::new(file_path), &response.content, suffix_map) {
-                    return Ok(response);
+                // Try to parse the response
+                match self.parse_response(response_text.clone()).await {
+                    Ok(parsed_response) => {
+                        // Check if the summary is valid
+                        if check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
+                            return Ok(parsed_response);
+                        } else {
+                            // If summary validation fails, treat it like a retriable error
+                            println!("{}", parsed_response.content);
+                            if retries >= MAX_RETRIES {
+                                anyhow::bail!("Max retries exceeded. Could not generate valid summary format");
+                            }
+                            // Continue to retry logic
+                        }
+                    }
+                    Err(e) => {
+                        // If parsing fails and we're out of retries, bail
+                        if retries >= MAX_RETRIES {
+                            anyhow::bail!("Failed to parse response after {} retries: {}", MAX_RETRIES, e);
+                        }
+                        // Continue to retry logic
+                    }
                 }
+            } else if !status.is_server_error() && status != 429 {
+                // Only bail immediately on non-retriable errors
+                anyhow::bail!("API request failed with non-retriable error: {}", response_text);
             }
-
-            if !status.is_server_error() && status != 429 {
-                anyhow::bail!("API request failed: {}", response_text);
-            }
+    
+            // Retry logic
             if retries >= MAX_RETRIES {
-                anyhow::bail!("Max retries exceeded. Last error: {}", response_text);
+                anyhow::bail!("Max retries exceeded. Last error: {} {}", status, response_text);
             }
-
+    
             sleep(Duration::from_millis(backoff_ms)).await;
             retries += 1;
             backoff_ms *= 2;
         }
     }
 }
+
 pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
@@ -347,8 +370,6 @@ pub async fn get_summaries(
             prompt_base + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
         };
 
-        println!("{}", prompt);
-
         let messages: Vec<Message> = vec![Message {
             role: "user".to_string(),
             content: prompt,
@@ -386,12 +407,20 @@ pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static st
         if lines.len() < 4 {
             return false;
         }
-        let comment_start = lines[0].trim() == *multi_line_comment_start;
-        let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
-        let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
-        let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+        if multi_line_comment_end != &"single line" {
+            let comment_start = lines[0].trim() == *multi_line_comment_start;
+            let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
+            let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
+            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+            comment_start && dirscribe_start && dirscribe_end && comment_end
+        } else {
+            let comment_start = lines[0].trim() == *multi_line_comment_start;
+            let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
+            let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
+            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
+            comment_start && dirscribe_start && dirscribe_end && comment_end
+        }
 
-        comment_start && dirscribe_start && dirscribe_end && comment_end
     } else {
         false
     }

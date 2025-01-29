@@ -69,8 +69,8 @@ impl UnifiedClient {
 
         let (api_key, base_url, model) = match provider {
             Provider::Deepseek => {
-                let key = env::var("DEEPSEEK_API_KEY")
-                    .context("DEEPSEEK_API_KEY not set")?;
+                let key = env::var("PROVIDER_API_KEY")
+                    .context("PROVIDER_API_KEY not set")?;
                 let model = env::var("DIRSCRIBE_MODEL")
                     .unwrap_or_else(|_| DEFAULT_DEEPSEEK_MODEL.to_string());
                 (
@@ -80,8 +80,8 @@ impl UnifiedClient {
                 )
             }
             Provider::Anthropic => {
-                let key = env::var("ANTHROPIC_API_KEY")
-                    .context("ANTHROPIC_API_KEY not set")?;
+                let key = env::var("PROVIDER_API_KEY")
+                    .context("PROVIDER_API_KEY not set")?;
                 let model = env::var("DIRSCRIBE_MODEL")
                     .unwrap_or_else(|_| DEFAULT_ANTHROPIC_MODEL.to_string());
                 (

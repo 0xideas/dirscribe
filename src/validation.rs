@@ -63,16 +63,20 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         return Err(ValidationError("--apply can only be used with --summarize".into()).into());
     }
 
+    if cli.retrieve && !cli.summarize {
+        return Err(ValidationError("--retrieve can only be used with --summarize".into()).into());
+    }
+
     if cli.apply && cli.diff_only {
         return Err(ValidationError("--apply cannot be used with --diff-only".into()).into());
     }
 
-    if cli.apply && cli.retrieve {
-        return Err(ValidationError("--apply and --retrieve cannot be used together".into()).into());
-    }
-
     if cli.diff_only && cli.retrieve {
         return Err(ValidationError("--retrieve is not available with --diff-only".into()).into());
+    }
+
+    if cli.apply && cli.retrieve {
+        return Err(ValidationError("--apply and --retrieve cannot be used together".into()).into());
     }
 
 

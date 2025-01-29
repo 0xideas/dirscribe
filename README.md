@@ -4,13 +4,16 @@ A CLI tool that collects and combines files with specific extensions from a dire
 
 ## Features and Options
 
-- Recursive traverse directory and filter by file extension
-- Apply .gitignore 
+- Recursively traverse directory and filter by file extension
+- Automatically applies .gitignore 
 - Configure subpaths to include or exclude
 - Filter by positive and/or negative keyword filters
 - Only output diff, between commit ids or from a specified commit id to the current state
 - Embed output in prompt template
 - Write output to file
+- Create summaries of file contents using LLM APIs
+- Save summaries as comments on top of files
+- Retrieve summaries from files with summaries added to them
 
 ## Installation
 
@@ -39,6 +42,7 @@ dirscribe "*"
 
 ### Options
 
+## 'Deterministic' Processing options
 - `--exclude-paths`: Comma-separated paths to exclude
 - `--include-paths`: Comma-separated paths to include
 - `--or-keywords`: Only include files containing at least one of these keywords
@@ -51,6 +55,11 @@ dirscribe "*"
 - `--output-path`: Path where the output file should be written. If not provided, output will be copied to clipboard
 - `--dont-use-gitignore`: include files covered by .gitignore
 
+## LLM based options
+- `--summarize`: Pass either file content or file diffs to LLM for summarization
+- `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
+- `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point
+
 ### Example with Diff Only
 
 ```bash
@@ -62,6 +71,18 @@ dirscribe rs,md \
 ```
 
 This will only process files that changed between commits abc123 and def456.
+
+### Example with Summarize
+
+```bash
+dirscribe rs,md --summarize --apply
+```
+
+This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek` or `ollama`.
+
+For each non-local provider, `PROVIDER_API_KEY` needs to be set.
+
+The model used can be specified using `DIRSCRIBE_MODEL`.
 
 ### Example with Prompt Template
 

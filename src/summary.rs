@@ -9,13 +9,12 @@ Used: reqwest,serde,tokio,anyhow,std,std,std,tokio,std,anyhow
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
-use anyhow::Result;
+use anyhow::{Result, Context};
 use std::env;
 use std::path::Path;
 use std::collections::HashMap;
 use tokio::sync::Semaphore;
 use std::sync::Arc;
-use anyhow::Context;
 use crate::file_processing::filter_dirscribe_sections;
 
 const MAX_CONCURRENT_REQUESTS: usize = 1;
@@ -286,23 +285,20 @@ impl UnifiedClient {
                 .await?;
 
             let status = response.status();
+            let response_text = response.text().await?;
 
             if status.is_success() {
-                let response_text = response.text().await?;
-                let response = self.parse_response(response_text).await?;
+                let response = self.parse_response(response_text.clone()).await?;
                 if check_summary(Path::new(file_path), &response.content, suffix_map) {
                     return Ok(response);
                 }
             }
 
             if !status.is_server_error() && status != 429 {
-                let error_text = response.text().await?;
-                anyhow::bail!("API request failed: {}", error_text);
+                anyhow::bail!("API request failed: {}", response_text);
             }
-
             if retries >= MAX_RETRIES {
-                let error_text = response.text().await?;
-                anyhow::bail!("Max retries exceeded. Last error: {}", error_text);
+                anyhow::bail!("Max retries exceeded. Last error: {}", response_text);
             }
 
             sleep(Duration::from_millis(backoff_ms)).await;
@@ -311,7 +307,6 @@ impl UnifiedClient {
         }
     }
 }
-
 pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
@@ -321,6 +316,7 @@ pub async fn get_summaries(
     let provider = Provider::Anthropic;
     let client = Arc::new(UnifiedClient::new(provider)?);
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_REQUESTS));
+    let suffix_map = Arc::new(suffix_map);
     
     let mut handles = Vec::new();
     
@@ -330,24 +326,28 @@ pub async fn get_summaries(
         let processed_content = filter_dirscribe_sections(&content, true);
         let file_path_clone = file_path.clone();
         let client = client.clone();
+        let suffix_map = Arc::clone(&suffix_map);
+        let prompt_template = prompt_template.clone();
 
-        let extension = Path::new(&file_path).extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or(""); 
+        let extension = Path::new(&file_path)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or(""); 
 
         let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
         let prompt = if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
             if multi_line_comment_end != &"single line" {
-                prompt_base + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_end)
+                prompt_base + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
+                    multi_line_comment_start, multi_line_comment_end)
             } else {
-                prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", 
+                    multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
             }
         } else {
             prompt_base + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
         };
 
         println!("{}", prompt);
-            
 
         let messages: Vec<Message> = vec![Message {
             role: "user".to_string(),
@@ -355,7 +355,7 @@ pub async fn get_summaries(
         }];
 
         let handle = tokio::spawn(async move {
-            let result = client.chat(&suffix_map, &file_path, &messages, None, None).await;
+            let result = client.chat(&suffix_map, &file_path_clone, &messages, None, None).await;
             drop(permit);
             match result {
                 Ok(response) => Ok(response.content),

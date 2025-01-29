@@ -19,12 +19,14 @@ const INITIAL_BACKOFF_MS: u64 = 1000;
 const DEFAULT_DEEPSEEK_MODEL: &str = "deepseek-chat";
 const DEFAULT_ANTHROPIC_MODEL: &str = "claude-3-sonnet-20240229";
 const DEFAULT_OLLAMA_MODEL: &str = "deepseek-r1:8b";
+const DEFAULT_GEMINI_MODEL: &str = "gemini-1.5-flash";
 
 #[derive(Debug, Clone, Copy)]
 pub enum Provider {
     Deepseek,
     Anthropic,
     Ollama,
+    Gemini,
 }
 
 // Implement FromStr for Provider to parse environment variable
@@ -36,6 +38,7 @@ impl FromStr for Provider {
             "deepseek" => Ok(Provider::Deepseek),
             "anthropic" => Ok(Provider::Anthropic),
             "ollama" => Ok(Provider::Ollama),
+            "gemini" => Ok(Provider::Gemini),
             _ => Err(anyhow::anyhow!("Invalid provider: {}. Valid options are: deepseek, anthropic, ollama", s))
         }
     }
@@ -99,6 +102,17 @@ impl UnifiedClient {
                     model,
                 )
             }
+            Provider::Gemini => {
+                let key = env::var("PROVIDER_API_KEY")
+                    .context("PROVIDER_API_KEY not set")?;
+                let model = env::var("DIRSCRIBE_MODEL")
+                    .unwrap_or_else(|_| DEFAULT_GEMINI_MODEL.to_string());
+                (
+                    key,
+                    format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent", model),
+                    model,
+                )
+            }
         };
 
         Ok(Self {
@@ -131,6 +145,16 @@ impl UnifiedClient {
                 );
             }
             Provider::Ollama => {}
+            Provider::Gemini => {
+                headers.insert(
+                    "Content-Type",
+                    "application/json; charset=utf-8".parse().unwrap(),
+                );
+                headers.insert(
+                    "X-goog-api-key",
+                    self.api_key.parse().unwrap(),
+                );
+            }
         }
         
         headers.insert(
@@ -171,6 +195,24 @@ impl UnifiedClient {
                     "model": self.model,
                     "prompt": prompt,
                     "stream": false
+                })
+            }
+            Provider::Gemini => {
+                // Convert messages to Gemini format
+                let contents = messages.iter().map(|m| {
+                    serde_json::json!({
+                        "parts": [{
+                            "text": m.content
+                        }]
+                    })
+                }).collect::<Vec<_>>();
+
+                serde_json::json!({
+                    "contents": contents,
+                    "generationConfig": {
+                        "temperature": temperature.unwrap_or(0.7),
+                        "maxOutputTokens": max_tokens.unwrap_or(2048)
+                    }
                 })
             }
         }
@@ -253,6 +295,42 @@ impl UnifiedClient {
                 Ok(UnifiedResponse {
                     content
                 })
+            }
+            Provider::Gemini => {
+                #[derive(Debug, Deserialize)]
+                struct GeminiResponse {
+                    candidates: Vec<GeminiCandidate>,
+                }
+
+                #[derive(Debug, Deserialize)]
+                struct GeminiCandidate {
+                    content: GeminiContent,
+                }
+
+                #[derive(Debug, Deserialize)]
+                struct GeminiContent {
+                    parts: Vec<GeminiPart>,
+                }
+
+                #[derive(Debug, Deserialize)]
+                struct GeminiPart {
+                    text: String,
+                }
+
+                let response: GeminiResponse = serde_json::from_str(&response_text)?;
+                
+                // Get the first candidate's text
+                let content = response.candidates
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("No response candidates"))?
+                    .content
+                    .parts
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("No response parts"))?
+                    .text
+                    .clone();
+
+                Ok(UnifiedResponse { content })
             }
         }
     }

@@ -270,7 +270,7 @@ impl UnifiedClient {
         }
     }
 
-    pub async fn chat(&self, file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
+    pub async fn chat(&self, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
         let request = self.build_request(messages.clone(), temperature, max_tokens);
         let headers = self.build_headers()?;
         
@@ -287,7 +287,10 @@ impl UnifiedClient {
 
             if response.status().is_success() {
                 let response_text = response.text().await?;
-                return self.parse_response(response_text).await;
+                let response = self.parse_response(response_text).await
+                if check_summary(file_path, response, suffix_map) {
+                    return response;
+                }
             }
 
             let status = response.status();
@@ -334,9 +337,9 @@ pub async fn get_summaries(
         let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
         let prompt = if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
             if multi_line_comment_end != &"single line" {
-                prompt_base + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', line N-1: '[/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_end)
+                prompt_base + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_end)
             } else {
-                prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', line N-1: '{} [/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                prompt_base + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
             }
         } else {
             prompt_base + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
@@ -351,7 +354,7 @@ pub async fn get_summaries(
         }];
 
         let handle = tokio::spawn(async move {
-            let result = client.chat(&file_path, &messages, None, None).await;
+            let result = client.chat(&suffix_map, &file_path, &messages, None, None).await;
             drop(permit);
             match result {
                 Ok(response) => Ok(response.content),

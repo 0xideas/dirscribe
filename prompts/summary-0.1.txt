@@ -3,84 +3,11 @@ it performs. After that, list all classes, methods, functions, global variables,
 Reduce the number of characters used to a minimum, while making sure that these lists are complete. This is very important.
 Format your response so that it can be used directly as an inline comment for the programming or config language used. DO NOT INCLUDE ANYTHING ELSE!
 
-For reference, here are the comment opening and closing characters for a number of languages:
-
-ActionScript: /* */
-Ada: /* */
-AppleScript: (* *)
-Assembly: /* / or ( *)
-AWK: /* */
-Bash: : ' '
-C: /* */
-C#: /* */
-C++: /* */
-COBOL: * or / /
-CoffeeScript: ### ###
-CSS: /* */
-D: /* */ or /+ +/
-Dart: /* */
-Delphi: { } or (* *)
-Elixir: #= =#
-Erlang: %%% %%%
-F#: (* *)
-Go: /* */
-Groovy: /* */
-Haskell: {- -}
-HTML: <!-- -->
-Java: /* */
-JavaScript: /* */
-Julia: #= =#
-Kotlin: /* */
-LISP: #| |#
-Lua: --[[ ]]
-MATLAB: %{ %}
-OCaml: (* *)
-Pascal: { } or (* *)
-Perl: =pod =cut
-PHP: /* */ or #[ ]#
-PowerShell: <# #>
-Python: ''' ''' or """ """
-R: /* */
-Ruby: =begin =end
-Rust: /* */
-Scala: /* */
-SQL: /* */
-Swift: /* */
-TypeScript: /* */
-VB.NET: ''' ''' or /* */
-XML: <!-- -->
-YAML: ''' '''
-
-HCL (Terraform): /* */ or # (single line only)
-TOML: # (single line only)
-Kubernetes YAML: # (single line only)
-Dockerfile: # (single line only)
-Nginx config: # (single line only)
-Apache config: # (single line only)
-INI: ; (single line only)
-Properties files: # (single line only)
-Ansible YAML: # (single line only)
-CloudFormation: # (single line only)
-ARM templates (Azure): // (single line only)
-Puppet: /* */ or # (single line)
-Chef: # (single line only)
-Salt: # (single line only)
-Bicep (Azure): /* */
-Jsonnet: /* */ or //
-Groovy (Jenkins Pipeline): /* */
-CircleCI config: # (single line only)
-GitHub Actions YAML: # (single line only)
-Docker Compose: # (single line only)
-
-If the file is in a language that supports multi line comments, follow this structure:
-[LANGUAGE-APPROPRIATE COMMENT OPENING]
-[The literal "[DIRSCRIBE]"]
+The summary should follow this structure:
 [Consise, dense summary of core functionality]
 Defined: [List of  classes, methods, functions, global variables, env variables or config values that are defined in the file in one line]
 Used: [List of  classes, methods, functions, global variables, env variables or config values that are called or used in the file in one line]
-[The literal "[/DIRSCRIBE]"]
-[LANGUAGE-APPROPRIATE COMMENT CLOSING]
 
-If not, follow the same structure but start every newline with the comment character, instead of using comment opening and closing characters.
+Make sure to only return the summary, and nothing else!
 
 ${${CONTENT}$}$

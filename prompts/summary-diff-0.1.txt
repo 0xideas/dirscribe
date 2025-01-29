@@ -35,35 +35,6 @@ Modified error handling or edge cases
 Performance or security implications
 
 Format the documentation using this structure:
-CopyDIFF SUMMARY
-------------
-[Overview of changes and their purpose]
-
-MODIFIED FILES
--------------
-[List of changed files with brief descriptions]
-
-ADDITIONS
----------
-[Documentation of new code]
-
-MODIFICATIONS
-------------
-[Documentation of changed code]
-
-REMOVALS
---------
-[Documentation of removed code]
-
-MIGRATION NOTES
---------------
-[Steps required to adopt changes]
-
-TESTING CONSIDERATIONS
----------------------
-[Areas requiring particular testing attention]
-Style guidelines:
-
 Use clear, concise language
 Maintain consistent indentation
 Use blank lines to separate major sections
@@ -73,12 +44,9 @@ Use consistent capitalization and punctuation
 Additional diff-specific guidelines:
 
 Reference specific commit hashes or PR numbers when available
-Link to related issues or documentation
 Highlight any breaking changes prominently
 Include before/after examples for complex changes
 Note any required configuration changes
 Document changes to public APIs separately from internal changes
-
-Please maintain a professional tone while ensuring the documentation helps developers understand both the what and why of the changes.
 
 ${${CONTENT}$}$

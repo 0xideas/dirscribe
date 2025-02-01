@@ -1,0 +1,6 @@
+Please analyze the provided code file and generate concise, information-dense summary of the different core functionalities that
+it performs. Format your response so that it can be used directly as an inline comment for the programming or config language used.
+
+Make sure to only return the summary, and nothing else!
+
+${${CONTENT}$}$

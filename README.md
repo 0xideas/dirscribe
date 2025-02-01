@@ -57,6 +57,7 @@ dirscribe "*"
 
 #### LLM based options
 - `--summarize`: Pass either file content or file diffs to LLM for summarization
+- `--summarize_keywords`: Pass either file content or file diffs to LLM for summarization, and extract classes, functions and methods defined or used
 - `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
 - `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point
 
@@ -78,7 +79,7 @@ This will only process files that changed between commits abc123 and def456.
 dirscribe rs,md --summarize --apply
 ```
 
-This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek` or `ollama`.
+This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek`, `gemini` or `ollama`.
 
 For each non-local provider, `PROVIDER_API_KEY` needs to be set.
 

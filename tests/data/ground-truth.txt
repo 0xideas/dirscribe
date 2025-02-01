@@ -73,6 +73,7 @@ dirscribe "*"
 
 #### LLM based options
 - `--summarize`: Pass either file content or file diffs to LLM for summarization
+- `--summarize_keywords`: Pass either file content or file diffs to LLM for summarization, and extract classes, functions and methods defined or used
 - `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
 - `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point
 
@@ -94,7 +95,7 @@ This will only process files that changed between commits abc123 and def456.
 dirscribe rs,md --summarize --apply
 ```
 
-This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek` or `ollama`.
+This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek`, `gemini` or `ollama`.
 
 For each non-local provider, `PROVIDER_API_KEY` needs to be set.
 
@@ -148,8 +149,13 @@ pub fn load_prompts(_dir: &str) -> std::io::Result<HashMap<String, String>> {
     
     // Include prompt files at compile time
     prompts.insert(
-        "summary-0.1".to_string(),
-        include_str!("../prompts/summary-0.1.txt").to_string()
+        "summary-0.2".to_string(),
+        include_str!("../prompts/summary-0.2.txt").to_string()
+    );
+
+    prompts.insert(
+        "summary-keywords-0.1".to_string(),
+        include_str!("../prompts/summary-keywords-0.1.txt").to_string()
     );
     
     prompts.insert(
@@ -364,12 +370,12 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         &cli.include_paths,
     )?;
 
-    if cli.apply && !cli.summarize {
-        return Err(ValidationError("--apply can only be used with --summarize".into()).into());
+    if cli.apply && (!cli.summarize && !cli.summarize_keywords){
+        return Err(ValidationError("--apply can only be used with --summarize or --summarize_keywords".into()).into());
     }
 
-    if cli.retrieve && !cli.summarize {
-        return Err(ValidationError("--retrieve can only be used with --summarize".into()).into());
+    if cli.retrieve && (!cli.summarize && !cli.summarize_keywords) {
+        return Err(ValidationError("--retrieve can only be used with --summarize or --summarize_keywords".into()).into());
     }
 
     if cli.apply && cli.diff_only {
@@ -724,6 +730,7 @@ async fn main() -> Result<()> {
         &suffixes,
         cli.dont_use_gitignore,
         cli.summarize,
+        cli.summarize_keywords,
         summarize_prompt_templates,
         cli.apply,
         cli.retrieve,
@@ -778,6 +785,7 @@ pub async fn process_directory(
     suffixes: &[String],
     dont_use_gitignore: bool,
     summarize: bool,
+    summarize_keywords: bool,
     summarize_prompt_templates: HashMap<String, String>,
     apply: bool,
     retrieve: bool,
@@ -891,7 +899,7 @@ pub async fn process_directory(
         writeln!(output, "{}", file_path.display())?;
     }
     writeln!(output)?;
-    if !summarize {
+    if !summarize && !summarize_keywords {
         writeln!(output, "File Contents:")?;
     } else {
         writeln!(output, "File Summaries:")?;
@@ -919,7 +927,7 @@ pub async fn process_directory(
         .collect();
 
     // Generate output string maintaining file path order
-    let result = if summarize {
+    let result = if summarize | summarize_keywords {
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
@@ -929,7 +937,11 @@ pub async fn process_directory(
 
         let summaries = if !diff_only {
             if !retrieve {
-                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone(), diff_only).await?
+                if summarize {
+                    get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.2"].clone(), suffix_map.clone(), diff_only).await?
+                } else { // if summarize_keywords 
+                    get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-keywords-0.1"].clone(), suffix_map.clone(), diff_only).await?
+                }
             } else {
                 get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
             }
@@ -1532,9 +1544,15 @@ pub struct Cli {
     #[arg(long, default_value_t = false)]
     pub dont_use_gitignore: bool,
 
-    /// Summarize file contents
+    /// Summarize file contents with keywords
     #[arg(long, default_value_t = false)]
     pub summarize: bool,
+
+    /// Summarize file contents with keywords
+    #[arg(long, default_value_t = false)]
+    pub summarize_keywords: bool,
+
+
 
     /// Apply summaries to code files
     #[arg(long, default_value_t = false)]

@@ -59,12 +59,12 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         &cli.include_paths,
     )?;
 
-    if cli.apply && !cli.summarize {
-        return Err(ValidationError("--apply can only be used with --summarize".into()).into());
+    if cli.apply && (!cli.summarize && !cli.summarize_keywords){
+        return Err(ValidationError("--apply can only be used with --summarize or --summarize_keywords".into()).into());
     }
 
-    if cli.retrieve && !cli.summarize {
-        return Err(ValidationError("--retrieve can only be used with --summarize".into()).into());
+    if cli.retrieve && (!cli.summarize && !cli.summarize_keywords) {
+        return Err(ValidationError("--retrieve can only be used with --summarize or --summarize_keywords".into()).into());
     }
 
     if cli.apply && cli.diff_only {

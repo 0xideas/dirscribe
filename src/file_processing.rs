@@ -15,6 +15,7 @@ pub async fn process_directory(
     suffixes: &[String],
     dont_use_gitignore: bool,
     summarize: bool,
+    summarize_keywords: bool,
     summarize_prompt_templates: HashMap<String, String>,
     apply: bool,
     retrieve: bool,
@@ -128,7 +129,7 @@ pub async fn process_directory(
         writeln!(output, "{}", file_path.display())?;
     }
     writeln!(output)?;
-    if !summarize {
+    if !summarize && !summarize_keywords {
         writeln!(output, "File Contents:")?;
     } else {
         writeln!(output, "File Summaries:")?;
@@ -156,7 +157,7 @@ pub async fn process_directory(
         .collect();
 
     // Generate output string maintaining file path order
-    let result = if summarize {
+    let result = if summarize | summarize_keywords {
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
@@ -166,7 +167,11 @@ pub async fn process_directory(
 
         let summaries = if !diff_only {
             if !retrieve {
-                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone(), diff_only).await?
+                if summarize {
+                    get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.2"].clone(), suffix_map.clone(), diff_only).await?
+                } else { // if summarize_keywords 
+                    get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-keywords-0.1"].clone(), suffix_map.clone(), diff_only).await?
+                }
             } else {
                 get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
             }

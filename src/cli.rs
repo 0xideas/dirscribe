@@ -18,9 +18,15 @@ pub struct Cli {
     #[arg(long, default_value_t = false)]
     pub dont_use_gitignore: bool,
 
-    /// Summarize file contents
+    /// Summarize file contents with keywords
     #[arg(long, default_value_t = false)]
     pub summarize: bool,
+
+    /// Summarize file contents with keywords
+    #[arg(long, default_value_t = false)]
+    pub summarize_keywords: bool,
+
+
 
     /// Apply summaries to code files
     #[arg(long, default_value_t = false)]

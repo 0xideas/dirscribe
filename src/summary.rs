@@ -481,26 +481,31 @@ pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static st
         .and_then(|ext| ext.to_str())
         .unwrap_or(""); 
     if let Some(comment_chars) = suffix_map.get(extension)  {
-        let (multi_line_comment_start, multi_line_comment_end) = comment_chars[0];
-        let lines: Vec<&str> = s.trim().split('\n').collect();
-        if lines.len() < 4 {
-            return false;
-        }
-        if multi_line_comment_end != "single line" {
-            let comment_start = lines[0].trim() == multi_line_comment_start;
-            let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
-            let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
-            let comment_end = lines[lines.len() - 1].trim() == multi_line_comment_end;
-            comment_start && dirscribe_start && dirscribe_end && comment_end
-        } else {
-            let comment_start = lines[0].trim() == multi_line_comment_start;
-            let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
-            let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
-            let comment_end = lines[lines.len() - 1].trim() == multi_line_comment_start;
-            comment_start && dirscribe_start && dirscribe_end && comment_end
-        }
+        comment_chars.iter().for_each(|(multi_line_comment_start, multi_line_comment_end)| {
+            let lines: Vec<&str> = s.trim().split('\n').collect();
+            if lines.len() < 4 {
+                return false;
+            }
+            if multi_line_comment_end != "\n" {
+                let comment_start = lines[0].trim() == multi_line_comment_start;
+                let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
+                let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
+                let comment_end = lines[lines.len() - 1].trim() == multi_line_comment_end;
+                let summary_valid = comment_start && dirscribe_start && dirscribe_end && comment_end;
+                if summary_valid {
+                    return summary_valid
+                }
+            } else {
+                let comment_start = lines[0].trim() == multi_line_comment_start;
+                let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
+                let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
+                let comment_end = lines[lines.len() - 1].trim() == multi_line_comment_start;
+                let summary_valid = comment_start && dirscribe_start && dirscribe_end && comment_end;
+                if summary_valid {
+                    return summary_valid
+                }
+            }
+        })
     }
-    else {
-        false
-    }
+    return false
 }

@@ -89,6 +89,7 @@ async fn main() -> Result<()> {
         &suffixes,
         cli.dont_use_gitignore,
         cli.summarize,
+        cli.summarize_keywords,
         summarize_prompt_templates,
         cli.apply,
         cli.retrieve,

@@ -73,6 +73,7 @@ dirscribe "*"
 
 #### LLM based options
 - `--summarize`: Pass either file content or file diffs to LLM for summarization
+- `--summarize-keywords`: Pass either file content or file diffs to LLM for summarization, and extract classes, functions and methods defined or used
 - `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
 - `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point
 
@@ -94,7 +95,7 @@ This will only process files that changed between commits abc123 and def456.
 dirscribe rs,md --summarize --apply
 ```
 
-This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek` or `ollama`.
+This will pass each file that was discovered to the Deepkseek or Anthropic API, or a locally running Ollama endpoint. The provider is set with the env variable `DIRSCRIBE_PROVIDER`, which can be set to `anthropic`, `deepseek`, `gemini` or `ollama`.
 
 For each non-local provider, `PROVIDER_API_KEY` needs to be set.
 
@@ -148,8 +149,13 @@ pub fn load_prompts(_dir: &str) -> std::io::Result<HashMap<String, String>> {
     
     // Include prompt files at compile time
     prompts.insert(
-        "summary-0.1".to_string(),
-        include_str!("../prompts/summary-0.1.txt").to_string()
+        "summary-0.2".to_string(),
+        include_str!("../prompts/summary-0.2.txt").to_string()
+    );
+
+    prompts.insert(
+        "summary-keywords-0.1".to_string(),
+        include_str!("../prompts/summary-keywords-0.1.txt").to_string()
     );
     
     prompts.insert(
@@ -364,12 +370,12 @@ pub fn validate_cli_args(cli: &Cli) -> Result<()> {
         &cli.include_paths,
     )?;
 
-    if cli.apply && !cli.summarize {
-        return Err(ValidationError("--apply can only be used with --summarize".into()).into());
+    if cli.apply && (!cli.summarize && !cli.summarize_keywords){
+        return Err(ValidationError("--apply can only be used with --summarize or --summarize_keywords".into()).into());
     }
 
-    if cli.retrieve && !cli.summarize {
-        return Err(ValidationError("--retrieve can only be used with --summarize".into()).into());
+    if cli.retrieve && (!cli.summarize && !cli.summarize_keywords) {
+        return Err(ValidationError("--retrieve can only be used with --summarize or --summarize_keywords".into()).into());
     }
 
     if cli.apply && cli.diff_only {
@@ -724,6 +730,7 @@ async fn main() -> Result<()> {
         &suffixes,
         cli.dont_use_gitignore,
         cli.summarize,
+        cli.summarize_keywords,
         summarize_prompt_templates,
         cli.apply,
         cli.retrieve,
@@ -778,6 +785,7 @@ pub async fn process_directory(
     suffixes: &[String],
     dont_use_gitignore: bool,
     summarize: bool,
+    summarize_keywords: bool,
     summarize_prompt_templates: HashMap<String, String>,
     apply: bool,
     retrieve: bool,
@@ -891,7 +899,7 @@ pub async fn process_directory(
         writeln!(output, "{}", file_path.display())?;
     }
     writeln!(output)?;
-    if !summarize {
+    if !summarize && !summarize_keywords {
         writeln!(output, "File Contents:")?;
     } else {
         writeln!(output, "File Summaries:")?;
@@ -919,7 +927,7 @@ pub async fn process_directory(
         .collect();
 
     // Generate output string maintaining file path order
-    let result = if summarize {
+    let result = if summarize | summarize_keywords {
         let valid_file_strings: Vec<String> = valid_files.iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect();
@@ -929,7 +937,11 @@ pub async fn process_directory(
 
         let summaries = if !diff_only {
             if !retrieve {
-                get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.1"].clone(), suffix_map.clone(), diff_only).await?
+                if summarize {
+                    get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-0.2"].clone(), suffix_map.clone(), diff_only).await?
+                } else { // if summarize_keywords 
+                    get_summaries(valid_file_strings.clone(), file_contents.clone(), summarize_prompt_templates["summary-keywords-0.1"].clone(), suffix_map.clone(), diff_only).await?
+                }
             } else {
                 get_summaries_from_files(valid_file_strings.clone(), file_contents.clone())
             }
@@ -1066,7 +1078,7 @@ fn insert_timestamp(input: &str) -> String {
     lines.join("\n")
 }
 
-pub fn write_summary_to_file(file_path: &Path, summary: &str, suffix_map: HashMap<&'static str, (&'static str, &'static str)>) -> anyhow::Result<()> {
+pub fn write_summary_to_file(file_path: &Path, summary: &str, suffix_map: HashMap<&'static str, Vec<(&'static str, &'static str)>>) -> anyhow::Result<()> {
     if check_summary(file_path, summary, &suffix_map) | check_prefix(summary) {
         let content = fs::read_to_string(file_path)?;    
         let processed_content = filter_dirscribe_sections(&content, true);
@@ -1247,265 +1259,232 @@ fn is_likely_text_file(path: &Path) -> bool {
 
 
 
-fn create_comment_map() -> HashMap<&'static str, (&'static str, &'static str)> {
+fn create_comment_map() -> HashMap<&'static str, Vec<(&'static str, &'static str)>> {
     let mut map = HashMap::new();
     
-    // Existing mappings
+    // Helper function to insert comment styles
+    let mut insert = |ext: &'static str, comments: Vec<(&'static str, &'static str)>| {
+        map.insert(ext, comments);
+    };
+
     // ActionScript
-    map.insert("as", ("/*", "*/"));
+    insert("as", vec![("/*", "*/")]);
     
     // Ada
-    map.insert("ada", ("/*", "*/"));
-    map.insert("adb", ("/*", "*/"));
-    map.insert("ads", ("/*", "*/"));
+    insert("ada", vec![("/*", "*/")]);
+    insert("adb", vec![("/*", "*/")]);
+    insert("ads", vec![("/*", "*/")]);
     
     // AppleScript
-    map.insert("scpt", ("(*", "*)"));
-    map.insert("applescript", ("(*", "*)"));
+    insert("scpt", vec![("(*", "*)")]);
+    insert("applescript", vec![("(*", "*)")]);
     
     // Assembly
-    map.insert("asm", ("/*", "*/"));
-    map.insert("s", ("/*", "*/"));
+    insert("asm", vec![("/*", "*/")]);
+    insert("s", vec![("/*", "*/")]);
     
     // AWK
-    map.insert("awk", ("/*", "*/"));
+    insert("awk", vec![("/*", "*/")]);
     
     // Bash
-    map.insert("sh", (":'", "'"));
-    map.insert("bash", (":'", "'"));
+    insert("sh", vec![(":'", "'"), ("#", "\n")]);
+    insert("bash", vec![(":'", "'"), ("#", "\n")]);
     
     // C
-    map.insert("c", ("/*", "*/"));
-    map.insert("h", ("/*", "*/"));
+    insert("c", vec![("/*", "*/"), ("//", "\n")]);
+    insert("h", vec![("/*", "*/"), ("//", "\n")]);
     
     // C#
-    map.insert("cs", ("/*", "*/"));
+    insert("cs", vec![("/*", "*/"), ("//", "\n")]);
     
     // C++
-    map.insert("cpp", ("/*", "*/"));
-    map.insert("hpp", ("/*", "*/"));
-    map.insert("cc", ("/*", "*/"));
-    map.insert("hh", ("/*", "*/"));
-    map.insert("cxx", ("/*", "*/"));
-    map.insert("hxx", ("/*", "*/"));
+    let cpp_comments = vec![("/*", "*/"), ("//", "\n")];
+    insert("cpp", cpp_comments.clone());
+    insert("hpp", cpp_comments.clone());
+    insert("cc", cpp_comments.clone());
+    insert("hh", cpp_comments.clone());
+    insert("cxx", cpp_comments.clone());
+    insert("hxx", cpp_comments.clone());
     
     // COBOL
-    map.insert("cob", ("/*", "*/"));
-    map.insert("cbl", ("/*", "*/"));
+    insert("cob", vec![("/*", "*/")]);
+    insert("cbl", vec![("/*", "*/")]);
     
     // CoffeeScript
-    map.insert("coffee", ("###", "###"));
+    insert("coffee", vec![("###", "###"), ("#", "\n")]);
     
     // CSS
-    map.insert("css", ("/*", "*/"));
+    insert("css", vec![("/*", "*/")]);
     
     // D
-    map.insert("d", ("/*", "*/"));
+    insert("d", vec![("/*", "*/"), ("//", "\n")]);
     
     // Dart
-    map.insert("dart", ("/*", "*/"));
+    insert("dart", vec![("/*", "*/"), ("//", "\n")]);
     
-    // Delphi
-    map.insert("pas", ("{", "}"));
-    map.insert("dpr", ("{", "}"));
+    // Delphi/Pascal
+    insert("pas", vec![("{", "}"), ("(*", "*)")]);
+    insert("dpr", vec![("{", "}"), ("(*", "*)")]);
     
     // Elixir
-    map.insert("ex", ("#=", "=#"));
-    map.insert("exs", ("#=", "=#"));
+    insert("ex", vec![("#=", "=#"), ("#", "\n")]);
+    insert("exs", vec![("#=", "=#"), ("#", "\n")]);
     
     // Erlang
-    map.insert("erl", ("%%%", "%%%"));
-    map.insert("hrl", ("%%%", "%%%"));
+    insert("erl", vec![("%%%", "%%%"), ("%", "\n")]);
+    insert("hrl", vec![("%%%", "%%%"), ("%", "\n")]);
     
     // F#
-    map.insert("fs", ("(*", "*)"));
-    map.insert("fsx", ("(*", "*)"));
+    insert("fs", vec![("(*", "*)"), ("//", "\n")]);
+    insert("fsx", vec![("(*", "*)"), ("//", "\n")]);
     
     // Go
-    map.insert("go", ("/*", "*/"));
+    insert("go", vec![("/*", "*/"), ("//", "\n")]);
     
     // Groovy
-    map.insert("groovy", ("/*", "*/"));
-    map.insert("gvy", ("/*", "*/"));
+    insert("groovy", vec![("/*", "*/"), ("//", "\n")]);
+    insert("gvy", vec![("/*", "*/"), ("//", "\n")]);
     
     // Haskell
-    map.insert("hs", ("{-", "-}"));
-    map.insert("lhs", ("{-", "-}"));
+    insert("hs", vec![("{-", "-}"), ("--", "\n")]);
+    insert("lhs", vec![("{-", "-}"), ("--", "\n")]);
     
-    // HTML
-    map.insert("html", ("<!--", "-->"));
-    map.insert("htm", ("<!--", "-->"));
+    // HTML/XML
+    let xml_comments = vec![("<!--", "-->")];
+    insert("html", xml_comments.clone());
+    insert("htm", xml_comments.clone());
+    insert("xml", xml_comments.clone());
+    insert("xsl", xml_comments.clone());
+    insert("xsd", xml_comments.clone());
     
     // Java
-    map.insert("java", ("/*", "*/"));
+    insert("java", vec![("/*", "*/"), ("//", "\n")]);
     
     // JavaScript
-    map.insert("js", ("/*", "*/"));
-    map.insert("mjs", ("/*", "*/"));
+    insert("js", vec![("/*", "*/"), ("//", "\n")]);
+    insert("mjs", vec![("/*", "*/"), ("//", "\n")]);
     
     // Julia
-    map.insert("jl", ("#=", "=#"));
+    insert("jl", vec![("#=", "=#"), ("#", "\n")]);
     
     // Kotlin
-    map.insert("kt", ("/*", "*/"));
-    map.insert("kts", ("/*", "*/"));
+    insert("kt", vec![("/*", "*/"), ("//", "\n")]);
+    insert("kts", vec![("/*", "*/"), ("//", "\n")]);
     
     // LISP
-    map.insert("lisp", ("#|", "|#"));
-    map.insert("lsp", ("#|", "|#"));
-    map.insert("cl", ("#|", "|#"));
+    insert("lisp", vec![("#|", "|#"), (";", "\n")]);
+    insert("lsp", vec![("#|", "|#"), (";", "\n")]);
+    insert("cl", vec![("#|", "|#"), (";", "\n")]);
     
     // Lua
-    map.insert("lua", ("--[[", "]]"));
+    insert("lua", vec![("--[[", "]]"), ("--", "\n")]);
     
     // MATLAB
-    map.insert("m", ("%{", "%}"));
-    map.insert("mat", ("%{", "%}"));
+    insert("m", vec![("%{", "%}"), ("%", "\n")]);
+    insert("mat", vec![("%{", "%}"), ("%", "\n")]);
     
     // OCaml
-    map.insert("ml", ("(*", "*)"));
-    map.insert("mli", ("(*", "*)"));
-    
-    // Pascal
-    map.insert("pas", ("{", "}"));
-    map.insert("pp", ("{", "}"));
+    insert("ml", vec![("(*", "*)")]);
+    insert("mli", vec![("(*", "*)")]);
     
     // Perl
-    map.insert("pl", ("=pod", "=cut"));
-    map.insert("pm", ("=pod", "=cut"));
+    insert("pl", vec![("=pod", "=cut"), ("#", "\n")]);
+    insert("pm", vec![("=pod", "=cut"), ("#", "\n")]);
     
     // PHP
-    map.insert("php", ("/*", "*/"));
+    insert("php", vec![("/*", "*/"), ("//", "\n"), ("#", "\n")]);
     
     // PowerShell
-    map.insert("ps1", ("<#", "#>"));
-    map.insert("psm1", ("<#", "#>"));
-    map.insert("psd1", ("<#", "#>"));
+    insert("ps1", vec![("<#", "#>"), ("#", "\n")]);
+    insert("psm1", vec![("<#", "#>"), ("#", "\n")]);
+    insert("psd1", vec![("<#", "#>"), ("#", "\n")]);
     
     // Python
-    map.insert("py", ("'''", "'''"));
-    map.insert("pyw", ("'''", "'''"));
+    insert("py", vec![("'''", "'''"), ("\"\"\"", "\"\"\""), ("#", "\n")]);
+    insert("pyw", vec![("'''", "'''"), ("\"\"\"", "\"\"\""), ("#", "\n")]);
     
     // R
-    map.insert("r", ("/*", "*/"));
-    map.insert("R", ("/*", "*/"));
+    insert("r", vec![("/*", "*/"), ("#", "\n")]);
+    insert("R", vec![("/*", "*/"), ("#", "\n")]);
     
     // Ruby
-    map.insert("rb", ("=begin", "=end"));
-    map.insert("rbw", ("=begin", "=end"));
+    insert("rb", vec![("=begin", "=end"), ("#", "\n")]);
+    insert("rbw", vec![("=begin", "=end"), ("#", "\n")]);
     
     // Rust
-    map.insert("rs", ("/*", "*/"));
+    insert("rs", vec![("/*", "*/"), ("//", "\n")]);
     
     // Scala
-    map.insert("scala", ("/*", "*/"));
-    map.insert("sc", ("/*", "*/"));
+    insert("scala", vec![("/*", "*/"), ("//", "\n")]);
+    insert("sc", vec![("/*", "*/"), ("//", "\n")]);
     
     // SQL
-    map.insert("sql", ("/*", "*/"));
+    insert("sql", vec![("/*", "*/"), ("--", "\n")]);
     
     // Swift
-    map.insert("swift", ("/*", "*/"));
+    insert("swift", vec![("/*", "*/"), ("//", "\n")]);
     
     // TypeScript
-    map.insert("ts", ("/*", "*/"));
-    map.insert("tsx", ("/*", "*/"));
+    insert("ts", vec![("/*", "*/"), ("//", "\n")]);
+    insert("tsx", vec![("/*", "*/"), ("//", "\n")]);
     
     // VB.NET
-    map.insert("vb", ("'''", "'''"));
+    insert("vb", vec![("'''", "'''"), ("'", "\n")]);
     
-    // XML
-    map.insert("xml", ("<!--", "-->"));
-    map.insert("xsl", ("<!--", "-->"));
-    map.insert("xsd", ("<!--", "-->"));
+    // Infrastructure as Code and Configuration Files
     
-    // YAML
-    map.insert("yml", ("'''", "'''"));
-    map.insert("yaml", ("'''", "'''"));
-    
-    // New mappings
     // HCL (Terraform)
-    map.insert("tf", ("/*", "*/"));
-    map.insert("tfvars", ("#", "single line"));
-    map.insert("hcl", ("/*", "*/"));
+    insert("tf", vec![("/*", "*/"), ("#", "\n")]);
+    insert("tfvars", vec![("#", "\n")]);
+    insert("hcl", vec![("/*", "*/"), ("#", "\n")]);
     
-    // TOML
-    map.insert("toml", ("#", "single line"));
+    // YAML files (including various YAML-based configs)
+    let yaml_comments = vec![("#", "\n")];
+    insert("yaml", yaml_comments.clone());
+    insert("yml", yaml_comments.clone());
+    insert("docker-compose.yml", yaml_comments.clone());
+    insert("docker-compose.yaml", yaml_comments.clone());
+    insert("workflow", yaml_comments.clone());
+    insert("github-action", yaml_comments.clone());
+    insert("circleci", yaml_comments.clone());
+    insert(".circleci", yaml_comments.clone());
     
-    // Kubernetes YAML
-    map.insert("yaml", ("#", "single line"));
-    map.insert("yml", ("#", "single line"));
+    // Configuration files
+    let hash_comments = vec![("#", "\n")];
+    insert("dockerfile", hash_comments.clone());
+    insert("containerfile", hash_comments.clone());
+    insert("nginx", hash_comments.clone());
+    insert("htaccess", hash_comments.clone());
+    insert("apache2.conf", hash_comments.clone());
+    insert("httpd.conf", hash_comments.clone());
     
-    // Dockerfile
-    map.insert("dockerfile", ("#", "single line"));
-    map.insert("containerfile", ("#", "single line"));
+    // INI and Properties
+    insert("ini", vec![(";", "\n")]);
+    insert("cfg", vec![(";", "\n")]);
+    insert("conf", vec![(";", "\n"), ("#", "\n")]);
+    insert("properties", vec![("#", "\n")]);
+    insert("prop", vec![("#", "\n")]);
     
-    // Nginx config
-    map.insert("nginx", ("#", "single line"));
-    map.insert("conf", ("#", "single line"));
+    // Infrastructure as Code - JSON-based
+    let json_comments = vec![("//", "\n")];
+    insert("json", json_comments.clone());
+    insert("arm.json", json_comments.clone());
+    insert("cf.json", json_comments.clone());
     
-    // Apache config
-    map.insert("htaccess", ("#", "single line"));
-    map.insert("apache2.conf", ("#", "single line"));
-    map.insert("httpd.conf", ("#", "single line"));
+    // Configuration Management
+    insert("pp", vec![("/*", "*/"), ("#", "\n")]);
+    insert("puppet", vec![("#", "\n")]);
+    insert("sls", vec![("#", "\n")]);
+    insert("salt", vec![("#", "\n")]);
     
-    // INI
-    map.insert("ini", (";", "single line"));
-    map.insert("cfg", (";", "single line"));
-    map.insert("conf", (";", "single line"));
+    // Modern IaC
+    insert("bicep", vec![("/*", "*/"), ("//", "\n")]);
+    insert("jsonnet", vec![("/*", "*/"), ("//", "\n")]);
+    insert("libsonnet", vec![("/*", "*/"), ("//", "\n")]);
     
-    // Properties files
-    map.insert("properties", ("#", "single line"));
-    map.insert("prop", ("#", "single line"));
-    
-    // Ansible YAML
-    map.insert("ansible", ("#", "single line"));
-    map.insert("yml", ("#", "single line"));
-    
-    // CloudFormation
-    map.insert("template", ("#", "single line"));
-    map.insert("cf.json", ("//", "single line"));
-    map.insert("cf.yaml", ("#", "single line"));
-    map.insert("cf.yml", ("#", "single line"));
-    
-    // ARM templates (Azure)
-    map.insert("json", ("//", "single line"));
-    map.insert("arm.json", ("//", "single line"));
-    
-    // Puppet
-    map.insert("pp", ("/*", "*/"));
-    map.insert("puppet", ("#", "single line"));
-    
-    // Chef
-    map.insert("rb", ("#", "single line"));
-    map.insert("chef", ("#", "single line"));
-    
-    // Salt
-    map.insert("sls", ("#", "single line"));
-    map.insert("salt", ("#", "single line"));
-    
-    // Bicep (Azure)
-    map.insert("bicep", ("/*", "*/"));
-    
-    // Jsonnet
-    map.insert("jsonnet", ("/*", "*/"));
-    map.insert("libsonnet", ("/*", "*/"));
-    
-    // Groovy (Jenkins Pipeline)
-    map.insert("jenkinsfile", ("/*", "*/"));
-    map.insert("Jenkinsfile", ("/*", "*/"));
-    
-    // CircleCI config
-    map.insert("circleci", ("#", "single line"));
-    map.insert(".circleci", ("#", "single line"));
-    
-    // GitHub Actions YAML
-    map.insert("workflow", ("#", "single line"));
-    map.insert("github-action", ("#", "single line"));
-    
-    // Docker Compose
-    map.insert("docker-compose.yml", ("#", "single line"));
-    map.insert("docker-compose.yaml", ("#", "single line"));
+    // CI/CD
+    insert("jenkinsfile", vec![("/*", "*/"), ("//", "\n")]);
+    insert("Jenkinsfile", vec![("/*", "*/"), ("//", "\n")]);
     
     map
 }
@@ -1532,9 +1511,15 @@ pub struct Cli {
     #[arg(long, default_value_t = false)]
     pub dont_use_gitignore: bool,
 
-    /// Summarize file contents
+    /// Summarize file contents with keywords
     #[arg(long, default_value_t = false)]
     pub summarize: bool,
+
+    /// Summarize file contents with keywords
+    #[arg(long, default_value_t = false)]
+    pub summarize_keywords: bool,
+
+
 
     /// Apply summaries to code files
     #[arg(long, default_value_t = false)]
@@ -1916,7 +1901,7 @@ impl UnifiedClient {
         }
     }
 
-    pub async fn chat(&self, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>, diff_only: bool,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
+    pub async fn chat(&self, suffix_map: &HashMap<&'static str, Vec<(&'static str, &'static str)>>, diff_only: bool,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
         let request = self.build_request(messages.clone(), temperature, max_tokens);
         let headers = self.build_headers()?;
         
@@ -1940,12 +1925,13 @@ impl UnifiedClient {
                 match self.parse_response(response_text.clone()).await {
                     Ok(parsed_response) => {
                         // Check if the summary is valid
-                        if diff_only | check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
+                        let summary_format_correct = check_summary(Path::new(file_path), &parsed_response.content, suffix_map);
+                        if diff_only | summary_format_correct {
                             return Ok(parsed_response);
                         } else {
                             // If summary validation fails, treat it like a retriable error
                             if retries >= MAX_RETRIES {
-                                anyhow::bail!("Max retries exceeded. Could not generate valid summary format");
+                                return Ok(parsed_response); //return badly formatted sumnmary rather than nothing
                             }
                             // Continue to retry logic
                         }
@@ -1979,7 +1965,7 @@ pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
     prompt_template: String,
-    suffix_map: HashMap<&'static str, (&'static str, &'static str)>,
+    suffix_map: HashMap<&'static str, Vec<(&'static str, &'static str)>>,
     diff_only:bool
 ) -> Result<Vec<String>> {
     // Get provider from environment variable, default to Ollama if not set
@@ -2012,13 +1998,15 @@ pub async fn get_summaries(
 
         let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
         let prompt = if !diff_only {
-            if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
-                if multi_line_comment_end != &"single line" {
-                    prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
-                        multi_line_comment_start, multi_line_comment_end)
+            if let Some(comment_chars) = suffix_map.get(extension)  {
+                let (multi_line_comment_start, multi_line_comment_end) = comment_chars[0];
+                 
+                if multi_line_comment_end != "single line" {
+                    prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'. The appropriate start and end of a multiline comment are '{}' and '{}', respectively.", 
+                        multi_line_comment_start, multi_line_comment_end, multi_line_comment_start, multi_line_comment_end)
                 } else {
-                    prompt_base.to_owned() + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", 
-                        multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                    prompt_base.to_owned() + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'. The appropriate start and end of a multiline comment are '{}' and '{}', respectively.", 
+                        multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_end)
                 }
             } else {
                 prompt_base.to_owned() + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."
@@ -2054,30 +2042,38 @@ pub async fn get_summaries(
     Ok(results)
 }
 
-pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
+pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, Vec<(&'static str, &'static str)>>) -> bool {
     let extension = file_path.extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or(""); 
-    if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
-        let lines: Vec<&str> = s.trim().split('\n').collect();
-        if lines.len() < 4 {
-            return false;
+    if let Some(comment_chars) = suffix_map.get(extension) {
+        for (multi_line_comment_start, multi_line_comment_end) in comment_chars {
+            let lines: Vec<&str> = s.trim().split('\n').collect();
+            if lines.len() < 4 {
+                continue;
+            }
+            
+            if *multi_line_comment_end != "\n" {
+                let comment_start = lines[0].trim() == *multi_line_comment_start;
+                let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
+                let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
+                let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+                
+                if comment_start && dirscribe_start && dirscribe_end && comment_end {
+                    return true;
+                }
+            } else {
+                let comment_start = lines[0].trim() == *multi_line_comment_start;
+                let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
+                let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
+                let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
+                
+                if comment_start && dirscribe_start && dirscribe_end && comment_end {
+                    return true;
+                }
+            }
         }
-        if multi_line_comment_end != &"single line" {
-            let comment_start = lines[0].trim() == *multi_line_comment_start;
-            let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
-            let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
-            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
-            comment_start && dirscribe_start && dirscribe_end && comment_end
-        } else {
-            let comment_start = lines[0].trim() == *multi_line_comment_start;
-            let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
-            let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
-            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
-            comment_start && dirscribe_start && dirscribe_end && comment_end
-        }
-
-    } else {
-        false
     }
+    false
 }
+

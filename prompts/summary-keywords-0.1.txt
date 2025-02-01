@@ -8,6 +8,6 @@ The summary should follow this structure:
 Defined: [List of  classes, methods, functions, global variables, env variables or config values that are defined in the file in one line]
 Used: [List of  classes, methods, functions, global variables, env variables or config values that are called or used in the file in one line]
 
-Make sure to only return the summary, and nothing else!
+Make sure to only return the summary enclosed by the appropriate multiline comment formatting, and nothing else!
 
 ${${CONTENT}$}$

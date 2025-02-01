@@ -488,7 +488,7 @@ pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static st
             }
             
             if *multi_line_comment_end != "\n" {
-                let comment_start = lines[0].trim() == *multi_line_comment_start;
+                let comment_start = lines[0].trim().starts_with(multi_line_comment_start);
                 let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
                 let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
                 let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
@@ -497,10 +497,10 @@ pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static st
                     return true;
                 }
             } else {
-                let comment_start = lines[0].trim() == *multi_line_comment_start;
+                let comment_start = lines[0].trim().starts_with(multi_line_comment_start);
                 let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
                 let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
-                let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
+                let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
                 
                 if comment_start && dirscribe_start && dirscribe_end && comment_end {
                     return true;

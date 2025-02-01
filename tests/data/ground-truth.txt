@@ -2002,11 +2002,11 @@ pub async fn get_summaries(
                 let (multi_line_comment_start, multi_line_comment_end) = comment_chars[0];
                  
                 if multi_line_comment_end != "single line" {
-                    prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
-                        multi_line_comment_start, multi_line_comment_end)
+                    prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'. The appropriate start and end of a multiline comment are '{}' and '{}', respectively.", 
+                        multi_line_comment_start, multi_line_comment_end, multi_line_comment_start, multi_line_comment_end)
                 } else {
-                    prompt_base.to_owned() + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'", 
-                        multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start)
+                    prompt_base.to_owned() + &format!("\n\nPlease make sure to start every line of the summary with '{}'. Please use the following structure: line 1: '{}', line 2: '{} [DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '{} [/DIRSCRIBE]', line N: '{}'. The appropriate start and end of a multiline comment are '{}' and '{}', respectively.", 
+                        multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_start, multi_line_comment_end)
                 }
             } else {
                 prompt_base.to_owned() + &"\n\nPlease make sure to return the summary as a comment block appropriately formatted for the language, with this structure: line 1: , line 2: [DIRSCRIBE], line N-1: [/DIRSCRIBE], line N: . Lines 1 and N should be empty."

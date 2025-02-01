@@ -435,7 +435,7 @@ pub async fn get_summaries(
             if let Some(comment_chars) = suffix_map.get(extension)  {
                 let (multi_line_comment_start, multi_line_comment_end) = comment_chars[0];
                  
-                if multi_line_comment_end != &"single line" {
+                if multi_line_comment_end != "single line" {
                     prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
                         multi_line_comment_start, multi_line_comment_end)
                 } else {
@@ -486,17 +486,17 @@ pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static st
         if lines.len() < 4 {
             return false;
         }
-        if multi_line_comment_end != &"single line" {
-            let comment_start = lines[0].trim() == *multi_line_comment_start;
+        if multi_line_comment_end != "single line" {
+            let comment_start = lines[0].trim() == multi_line_comment_start;
             let dirscribe_start = lines[1].trim() == "[DIRSCRIBE]";
             let dirscribe_end = lines[lines.len() - 2].trim() == "[/DIRSCRIBE]";
-            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_end;
+            let comment_end = lines[lines.len() - 1].trim() == multi_line_comment_end;
             comment_start && dirscribe_start && dirscribe_end && comment_end
         } else {
-            let comment_start = lines[0].trim() == *multi_line_comment_start;
+            let comment_start = lines[0].trim() == multi_line_comment_start;
             let dirscribe_start = lines[1].trim() == format!("{} [DIRSCRIBE]", multi_line_comment_start);
             let dirscribe_end = lines[lines.len() - 2].trim() == format!("{} [/DIRSCRIBE]", multi_line_comment_start);
-            let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
+            let comment_end = lines[lines.len() - 1].trim() == multi_line_comment_start;
             comment_start && dirscribe_start && dirscribe_end && comment_end
         }
     }

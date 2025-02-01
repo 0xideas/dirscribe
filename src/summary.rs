@@ -335,7 +335,7 @@ impl UnifiedClient {
         }
     }
 
-    pub async fn chat(&self, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>, diff_only: bool,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
+    pub async fn chat(&self, suffix_map: &HashMap<&'static str, Vec<(&'static str, &'static str)>>, diff_only: bool,  file_path: &str, messages: &Vec<Message>, temperature: Option<f32>, max_tokens: Option<i32>) -> Result<UnifiedResponse> {
         let request = self.build_request(messages.clone(), temperature, max_tokens);
         let headers = self.build_headers()?;
         
@@ -359,12 +359,13 @@ impl UnifiedClient {
                 match self.parse_response(response_text.clone()).await {
                     Ok(parsed_response) => {
                         // Check if the summary is valid
-                        if diff_only | check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
+                        let summary_format_correct = check_summary(Path::new(file_path), &parsed_response.content, suffix_map);
+                        if diff_only | summary_format_correct {
                             return Ok(parsed_response);
                         } else {
                             // If summary validation fails, treat it like a retriable error
                             if retries >= MAX_RETRIES {
-                                anyhow::bail!("Max retries exceeded. Could not generate valid summary format");
+                                return Ok(parsed_response); //return badly formatted sumnmary rather than nothing
                             }
                             // Continue to retry logic
                         }
@@ -398,7 +399,7 @@ pub async fn get_summaries(
     valid_files: Vec<String>, 
     file_contents: HashMap<String, String>, 
     prompt_template: String,
-    suffix_map: HashMap<&'static str, (&'static str, &'static str)>,
+    suffix_map: HashMap<&'static str, Vec<(&'static str, &'static str)>>,
     diff_only:bool
 ) -> Result<Vec<String>> {
     // Get provider from environment variable, default to Ollama if not set
@@ -431,7 +432,9 @@ pub async fn get_summaries(
 
         let prompt_base = prompt_template.replace("${${CONTENT}$}$", &processed_content);
         let prompt = if !diff_only {
-            if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+            if let Some(comment_chars) = suffix_map.get(extension)  {
+                let (multi_line_comment_start, multi_line_comment_end) = comment_chars[0];
+                 
                 if multi_line_comment_end != &"single line" {
                     prompt_base.to_owned() + &format!("\n\nPlease use the following structure: line 1: '{}', line 2: '[DIRSCRIBE]', lines 3 to N -2: *the summary*, line N-1: '[/DIRSCRIBE]', line N: '{}'", 
                         multi_line_comment_start, multi_line_comment_end)
@@ -473,11 +476,12 @@ pub async fn get_summaries(
     Ok(results)
 }
 
-pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, (&'static str, &'static str)>) -> bool {
+pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static str, Vec<(&'static str, &'static str)>>) -> bool {
     let extension = file_path.extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or(""); 
-    if let Some((multi_line_comment_start, multi_line_comment_end)) = suffix_map.get(extension) {
+    if let Some(comment_chars) = suffix_map.get(extension)  {
+        let (multi_line_comment_start, multi_line_comment_end) = comment_chars[0];
         let lines: Vec<&str> = s.trim().split('\n').collect();
         if lines.len() < 4 {
             return false;
@@ -495,8 +499,8 @@ pub fn check_summary(file_path: &Path, s: &str, suffix_map: &HashMap<&'static st
             let comment_end = lines[lines.len() - 1].trim() == *multi_line_comment_start;
             comment_start && dirscribe_start && dirscribe_end && comment_end
         }
-
-    } else {
+    }
+    else {
         false
     }
 }

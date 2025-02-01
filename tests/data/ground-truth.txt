@@ -1958,12 +1958,13 @@ impl UnifiedClient {
                 match self.parse_response(response_text.clone()).await {
                     Ok(parsed_response) => {
                         // Check if the summary is valid
-                        if diff_only | check_summary(Path::new(file_path), &parsed_response.content, suffix_map) {
+                        let summary_format_correct = check_summary(Path::new(file_path), &parsed_response.content, suffix_map);
+                        if diff_only | summary_format_correct {
                             return Ok(parsed_response);
                         } else {
                             // If summary validation fails, treat it like a retriable error
                             if retries >= MAX_RETRIES {
-                                anyhow::bail!("Max retries exceeded. Could not generate valid summary format");
+                                return Ok(parsed_response); //return badly formatted sumnmary rather than nothing
                             }
                             // Continue to retry logic
                         }

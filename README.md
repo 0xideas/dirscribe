@@ -57,7 +57,7 @@ dirscribe "*"
 
 #### LLM based options
 - `--summarize`: Pass either file content or file diffs to LLM for summarization
-- `--summarize_keywords`: Pass either file content or file diffs to LLM for summarization, and extract classes, functions and methods defined or used
+- `--summarize-keywords`: Pass either file content or file diffs to LLM for summarization, and extract classes, functions and methods defined or used
 - `--apply`: Write the LLM-generated summaries as multiline comments at the top of each file, to reduce duplicate work
 - `--retrieve`: Retrieve summaries from files, after they were "applied" at a previous point
 
